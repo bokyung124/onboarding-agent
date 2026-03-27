@@ -1,0 +1,67 @@
+version: 2
+
+sources:
+  - name: raw_notion
+    description: Airflow에서 Notion API로 추출한 원천 데이터
+    database: "{{ env_var('GCP_PROJECT_ID') }}"
+    schema: onboarding_agent
+    tables:
+      - name: raw_notion_pages
+        description: 노션 페이지 메타데이터 (제목, 부모, URL 등)
+        columns:
+          - name: page_id
+            tests:
+              - not_null
+      - name: raw_notion_blocks
+        description: 노션 블록 (텍스트, 헤딩, 리스트 등)
+        columns:
+          - name: block_id
+            tests:
+              - not_null
+          - name: page_id
+            tests:
+              - not_null
+      - name: raw_notion_databases
+        description: 노션 데이터베이스 스키마 및 메타데이터
+        columns:
+          - name: database_id
+            tests:
+              - not_null
+      - name: raw_notion_comments
+        description: 노션 페이지 댓글
+        columns:
+          - name: comment_id
+            tests:
+              - not_null
+          - name: page_id
+            tests:
+              - not_null
+
+models:
+  - name: stg_notion_pages
+    description: 페이지 메타데이터 정제 (최신 레코드, 타입 캐스팅)
+    columns:
+      - name: page_id
+        tests:
+          - unique
+          - not_null
+  - name: stg_notion_blocks
+    description: 블록 텍스트 정제 및 헤딩 레벨 추출
+    columns:
+      - name: block_id
+        tests:
+          - not_null
+  - name: stg_notion_databases
+    description: 데이터베이스 메타데이터 정제
+    columns:
+      - name: database_id
+        tests:
+          - unique
+          - not_null
+  - name: stg_notion_comments
+    description: 댓글 텍스트 정제 (최신 레코드, 타임스탬프 변환)
+    columns:
+      - name: comment_id
+        tests:
+          - unique
+          - not_null

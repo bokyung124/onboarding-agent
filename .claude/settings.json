@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit(/.claude/skills/notion-integration/**)",
+      "Edit(/.claude/skills/prompt-engineering/**)",
+      "Edit(/.claude/skills/plan-feature/**)",
+      "Edit(/.claude/skills/run-tests/**)"
+    ],
+    "additionalDirectories": [
+      "/Users/bokyung/onboarding-agent/.claude/skills"
+    ]
+  }
+}

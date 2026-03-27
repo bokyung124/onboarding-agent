@@ -1,0 +1,45 @@
+[project]
+name = "onboarding-agent"
+version = "0.1.0"
+description = "노션 데이터 기반 사내 온보딩 에이전트 — Vector Mart RAG 파이프라인"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "google-cloud-bigquery>=3.25",
+    "google-genai>=1.0",
+    "cachetools>=5.5",
+    "httpx>=0.27",
+    "notion-client>=3.0.0",
+    "slack-sdk>=3.30",
+    "dbt>=1.0.0.40.15",
+    "dbt-bigquery>=1.11.1",
+]
+
+[project.optional-dependencies]
+pipeline = [
+    "notion-client>=2.0",
+    "slack-sdk>=3.30",
+    "tenacity>=9.0",
+    "apache-airflow>=2.9",
+    "dbt-bigquery>=1.8",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "respx>=0.22",
+    "ruff>=0.8",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

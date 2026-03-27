@@ -1,0 +1,19 @@
+dbt_notion:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      method: oauth  # 또는 service-account
+      project: "{{ env_var('GCP_PROJECT_ID') }}"
+      dataset: onboarding_agent
+      threads: 4
+      timeout_seconds: 300
+      location: asia-northeast3  # 서울 리전 (필요 시 변경)
+    prod:
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('GCP_PROJECT_ID') }}"
+      dataset: onboarding_agent
+      threads: 4
+      timeout_seconds: 300
+      location: asia-northeast3

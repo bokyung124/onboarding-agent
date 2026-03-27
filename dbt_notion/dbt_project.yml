@@ -1,0 +1,33 @@
+name: dbt_notion
+version: "1.0.0"
+config-version: 2
+
+profile: dbt_notion
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+
+models:
+  dbt_notion:
+    staging:
+      notion:
+        +materialized: view
+        +schema: staging_notion
+      slack:
+        +materialized: view
+        +schema: staging_slack
+    intermediate:
+      notion:
+        +materialized: table
+        +schema: intermediate_notion
+      slack:
+        +materialized: table
+        +schema: intermediate_slack
+    mart:
+      +materialized: table
+      +schema: mart_notion
+
+seeds:
+  dbt_notion:
+    +schema: seeds

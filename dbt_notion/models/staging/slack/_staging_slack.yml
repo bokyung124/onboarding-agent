@@ -1,0 +1,21 @@
+version: 2
+
+sources:
+  - name: raw_slack
+    database: "{{ env_var('GCP_PROJECT_ID') }}"
+    schema: "{{ env_var('BQ_DATASET', 'onboarding_agent') }}"
+    tables:
+      - name: raw_slack_messages
+        columns:
+          - name: ts
+            tests:
+              - not_null
+          - name: channel_id
+            tests:
+              - not_null
+      - name: raw_slack_users
+        columns:
+          - name: user_id
+            tests:
+              - unique
+              - not_null
