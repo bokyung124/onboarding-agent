@@ -23,9 +23,7 @@ async def test_rate_limited_call_retries_on_ratelimited():
     error_response = {"ok": False, "error": "ratelimited"}
     error = SlackApiError("ratelimited", response=error_response)
 
-    mock_method = AsyncMock(
-        side_effect=[error, {"ok": True, "messages": []}]
-    )
+    mock_method = AsyncMock(side_effect=[error, {"ok": True, "messages": []}])
     result = await slack_rate_limited_call(mock_method, channel="C123")
     assert result["ok"] is True
     assert mock_method.call_count == 2

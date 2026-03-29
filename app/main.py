@@ -41,8 +41,23 @@ async def lifespan(app: FastAPI):
     app.state.orchestrator = orchestrator
     app.state.cache = cache
 
+    # Slack Bot (토큰 설정 시에만 시작)
+    slack_bot = None
+    if settings.slack_bot_token and settings.slack_app_token:
+        from app.services.slack_bot import SlackBotService
+
+        slack_bot = SlackBotService(
+            bot_token=settings.slack_bot_token,
+            app_token=settings.slack_app_token,
+            orchestrator=orchestrator,
+            cache=cache,
+        )
+        await slack_bot.start()
+
     yield
 
+    if slack_bot:
+        await slack_bot.stop()
     bq_client.close()
 
 

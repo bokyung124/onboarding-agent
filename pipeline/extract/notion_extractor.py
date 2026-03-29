@@ -3,10 +3,24 @@
 import logging
 from collections import deque
 from datetime import datetime, timezone
+from typing import Protocol
 
 from notion_client import AsyncClient
 
 from pipeline.extract.rate_limiter import rate_limited_call
+
+
+class BatchSink(Protocol):
+    """배치 단위로 추출 결과를 외부 저장소에 flush하는 인터페이스."""
+
+    async def flush(
+        self,
+        pages: list[dict],
+        blocks: list[dict],
+        databases: list[dict],
+        comments: list[dict],
+    ) -> None: ...
+
 
 logger = logging.getLogger(__name__)
 
@@ -143,15 +157,21 @@ class NotionExtractor:
     # ── 전체 크롤링 ──
 
     async def crawl_all(
-        self, since: str | None = None
+        self,
+        since: str | None = None,
+        sink: BatchSink | None = None,
+        batch_size: int = 100,
     ) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
         """전체 워크스페이스를 크롤링한다.
 
         Args:
             since: ISO 8601 타임스탬프. 지정하면 이후 수정된 페이지만 추출.
+            sink: 배치 flush 대상. 지정하면 batch_size마다 flush 후 버퍼 클리어.
+            batch_size: sink flush 단위 (페이지 수 기준). 기본 100.
 
         Returns:
-            (pages, blocks, databases, comments) 튜플.
+            sink 미지정 시 (pages, blocks, databases, comments) 튜플.
+            sink 지정 시 빈 리스트 튜플 (데이터는 sink로 flush됨).
         """
         all_pages: list[dict] = []
         all_blocks: list[dict] = []
@@ -228,12 +248,35 @@ class NotionExtractor:
                 len(comments),
             )
 
+            # 배치 flush
+            if sink and len(all_pages) >= batch_size:
+                await sink.flush(
+                    list(all_pages),
+                    list(all_blocks),
+                    list(all_databases),
+                    list(all_comments),
+                )
+                all_pages.clear()
+                all_blocks.clear()
+                all_databases.clear()
+                all_comments.clear()
+
+        # 잔여분 flush
+        if sink and (all_pages or all_blocks or all_databases or all_comments):
+            await sink.flush(
+                list(all_pages),
+                list(all_blocks),
+                list(all_databases),
+                list(all_comments),
+            )
+            all_pages.clear()
+            all_blocks.clear()
+            all_databases.clear()
+            all_comments.clear()
+
         logger.info(
-            "Crawl complete: %d pages, %d blocks, %d databases, %d comments",
-            len(all_pages),
-            len(all_blocks),
-            len(all_databases),
-            len(all_comments),
+            "Crawl complete: %d pages visited",
+            len(self._visited_pages),
         )
         return all_pages, all_blocks, all_databases, all_comments
 
@@ -312,6 +355,10 @@ class NotionExtractor:
                 else:
                     record["child_page_id"] = None
                     record["child_database_id"] = None
+
+                # 빈 텍스트 블록은 저장하지 않되, 자식이 있는 블록은 유지
+                if not plain_text and not markdown_text and not block.get("has_children"):
+                    continue
 
                 blocks.append(record)
                 block_order += 1
@@ -397,7 +444,7 @@ class NotionExtractor:
                     body["start_cursor"] = cursor
                 resp = await rate_limited_call(
                     self._client.request,
-                    path=f"databases/{database_id}/query",
+                    path=f"/databases/{database_id}/query",
                     method="POST",
                     body=body,
                 )

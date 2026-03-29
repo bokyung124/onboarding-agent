@@ -23,8 +23,9 @@ class Settings(BaseSettings):
     notion_api_key: str = ""
     notion_root_page_id: str = ""
 
-    # Slack (파이프라인 전용, 서빙에서는 미사용)
+    # Slack
     slack_bot_token: str = ""
+    slack_app_token: str = ""  # Socket Mode용 (xapp-...)
     slack_channel_ids: str = ""
     slack_workspace: str = ""
 

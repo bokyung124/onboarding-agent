@@ -37,9 +37,7 @@ class SearchOrchestrator:
         chunks = await self._vector_search.search(embedding, request.category)
 
         # 3. LLM 답변 생성
-        answer = await self._llm.generate_answer(
-            request.query, request.category, chunks
-        )
+        answer = await self._llm.generate_answer(request.query, request.category, chunks)
 
         # 4. 출처 조합 (중복 페이지 제거)
         sources = self._deduplicate_sources(chunks)

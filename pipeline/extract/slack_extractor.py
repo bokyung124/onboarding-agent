@@ -60,9 +60,7 @@ class SlackExtractor:
         if hasattr(self._client, "session") and self._client.session:
             await self._client.session.close()
 
-    async def extract_all(
-        self, since_ts: str | None = None
-    ) -> tuple[list[dict], list[dict]]:
+    async def extract_all(self, since_ts: str | None = None) -> tuple[list[dict], list[dict]]:
         """채널 메시지와 유저 정보를 추출한다.
 
         Args:
@@ -107,9 +105,7 @@ class SlackExtractor:
             if cursor:
                 kwargs["cursor"] = cursor
 
-            response = await slack_rate_limited_call(
-                self._client.users_list, **kwargs
-            )
+            response = await slack_rate_limited_call(self._client.users_list, **kwargs)
 
             for member in response.get("members", []):
                 if member.get("deleted", False):
@@ -162,9 +158,7 @@ class SlackExtractor:
             if cursor:
                 kwargs["cursor"] = cursor
 
-            response = await slack_rate_limited_call(
-                self._client.conversations_list, **kwargs
-            )
+            response = await slack_rate_limited_call(self._client.conversations_list, **kwargs)
 
             for ch in response.get("channels", []):
                 if not ch.get("is_archived", False):
@@ -195,9 +189,7 @@ class SlackExtractor:
             if cursor:
                 kwargs["cursor"] = cursor
 
-            response = await slack_rate_limited_call(
-                self._client.conversations_history, **kwargs
-            )
+            response = await slack_rate_limited_call(self._client.conversations_history, **kwargs)
 
             for msg in response.get("messages", []):
                 if msg.get("subtype") in ("channel_join", "channel_leave", "bot_message"):
@@ -258,9 +250,7 @@ class SlackExtractor:
             if cursor:
                 kwargs["cursor"] = cursor
 
-            response = await slack_rate_limited_call(
-                self._client.conversations_replies, **kwargs
-            )
+            response = await slack_rate_limited_call(self._client.conversations_replies, **kwargs)
 
             for msg in response.get("messages", []):
                 # 부모 메시지는 이미 history에서 수집됨

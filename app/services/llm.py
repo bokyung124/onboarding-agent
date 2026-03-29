@@ -28,9 +28,7 @@ class LLMService:
         self._client = client
         self._model = model
 
-    async def generate_answer(
-        self, query: str, category: str, chunks: list[ChunkResult]
-    ) -> str:
+    async def generate_answer(self, query: str, category: str, chunks: list[ChunkResult]) -> str:
         """검색된 청크를 컨텍스트로 사용하여 RAG 답변을 생성한다."""
         if not chunks:
             return "관련 문서를 찾지 못했습니다. 다른 검색어로 시도해 주세요."
@@ -64,9 +62,6 @@ class LLMService:
         parts: list[str] = []
         for i, chunk in enumerate(chunks, 1):
             source_label = "슬랙 채널" if chunk.source_type == "slack" else "문서"
-            header = (
-                f"[출처 {i}] ({source_label}: {chunk.page_title},"
-                f" 경로: {chunk.breadcrumb})"
-            )
+            header = f"[출처 {i}] ({source_label}: {chunk.page_title}, 경로: {chunk.breadcrumb})"
             parts.append(f"{header}\n{chunk.content}\n")
         return "\n".join(parts)

@@ -67,9 +67,7 @@ class VectorSearchService:
 
         # BigQuery 클라이언트는 동기 → executor로 async 래핑
         loop = asyncio.get_event_loop()
-        rows = await loop.run_in_executor(
-            None, partial(self._execute_query, query, job_config)
-        )
+        rows = await loop.run_in_executor(None, partial(self._execute_query, query, job_config))
 
         return [
             ChunkResult(
@@ -86,7 +84,5 @@ class VectorSearchService:
             for row in rows
         ]
 
-    def _execute_query(
-        self, query: str, job_config: bigquery.QueryJobConfig
-    ) -> list:
+    def _execute_query(self, query: str, job_config: bigquery.QueryJobConfig) -> list:
         return list(self._client.query(query, job_config=job_config).result())
