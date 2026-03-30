@@ -10,8 +10,8 @@
 
 with chunks as (
     select
-        concat('slack_', t.channel_id, '_', t.thread_id) as chunk_id,
-        concat('slack_', t.channel_id, '_', t.thread_id) as page_id,
+        concat('slack_', t.channel_id, '_', cast(t.thread_id as string)) as chunk_id,
+        concat('slack_', t.channel_id, '_', cast(t.thread_id as string)) as page_id,
         concat('#', t.channel_name) as page_title,
         concat('Slack > #', t.channel_name) as breadcrumb_path,
         coalesce(cc.category, 'uncategorized') as category,
@@ -19,7 +19,7 @@ with chunks as (
             'https://{{ env_var("SLACK_WORKSPACE", "workspace") }}.slack.com/archives/',
             t.channel_id,
             '/p',
-            replace(t.thread_id, '.', '')
+            replace(cast(t.thread_id as string), '.', '')
         ) as notion_url,
         cast(null as string) as client_name,
         cast(null as string) as tags,

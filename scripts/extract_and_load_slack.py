@@ -26,7 +26,30 @@ async def main() -> None:
     channel_ids_raw = os.getenv("SLACK_CHANNEL_IDS", "")
     channel_ids = [c.strip() for c in channel_ids_raw.split(",") if c.strip()] or None
 
-    # 1. Slack 추출
+    bq = bigquery.Client(project=project_id)
+    messages_table = f"{project_id}.{dataset}.raw_slack_messages"
+    first_flush = True
+
+    async def flush_channel(messages: list[dict]) -> None:
+        nonlocal first_flush
+        if not messages:
+            return
+        disposition = (
+            bigquery.WriteDisposition.WRITE_TRUNCATE if first_flush else bigquery.WriteDisposition.WRITE_APPEND
+        )
+        first_flush = False
+        loop = asyncio.get_event_loop()
+        job_config = bigquery.LoadJobConfig(
+            write_disposition=disposition,
+            autodetect=True,
+        )
+        await loop.run_in_executor(
+            None,
+            lambda: bq.load_table_from_json(messages, messages_table, job_config=job_config).result(),
+        )
+        logging.info("  raw_slack_messages: %d rows flushed", len(messages))
+
+    # 1. Slack 추출 (채널별 즉시 BQ flush)
     logging.info("Extracting from Slack...")
     extractor = SlackExtractor(
         bot_token=bot_token,
@@ -34,38 +57,28 @@ async def main() -> None:
         workspace=workspace,
     )
     try:
-        messages, users = await extractor.extract_all()
+        _, users = await extractor.extract_all(on_channel_done=flush_channel)
     finally:
         await extractor.close()
 
-    logging.info("Extracted: %d messages, %d users", len(messages), len(users))
-
-    if not messages:
+    if first_flush:
         logging.warning("No messages extracted!")
-        return
 
-    # 2. BigQuery 적재
-    bq = bigquery.Client(project=project_id)
-
-    for table_name, data in [
-        ("raw_slack_messages", messages),
-        ("raw_slack_users", users),
-    ]:
-        if not data:
-            logging.warning("  %s: no data, skipping", table_name)
-            continue
-        table_ref = f"{project_id}.{dataset}.{table_name}"
+    # 2. 유저 적재
+    if users:
+        users_table = f"{project_id}.{dataset}.raw_slack_users"
         job = bq.load_table_from_json(
-            data,
-            table_ref,
+            users,
+            users_table,
             job_config=bigquery.LoadJobConfig(
                 write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
                 autodetect=True,
             ),
         )
         job.result()
-        logging.info("  %s: %d rows loaded", table_name, len(data))
+        logging.info("  raw_slack_users: %d rows loaded", len(users))
 
+    bq.close()
     logging.info("Done!")
 
 

@@ -85,6 +85,12 @@ chunks as (
             case when d.client_name is not null and d.client_name != ''
                  then concat('고객사: ', d.client_name, '\n')
                  else '' end,
+            case when d.assignee is not null and d.assignee != ''
+                 then concat('담당자: ', d.assignee, '\n')
+                 else '' end,
+            case when d.properties_json is not null
+                 then concat('속성(JSON): ', d.properties_json, '\n')
+                 else '' end,
             '\n',
             s.section_text,
             case when sc.comments_text is not null
@@ -117,6 +123,9 @@ comment_chunks as (
             '카테고리: ', d.category, '\n',
             case when d.client_name is not null and d.client_name != ''
                  then concat('고객사: ', d.client_name, '\n')
+                 else '' end,
+            case when d.assignee is not null and d.assignee != ''
+                 then concat('담당자: ', d.assignee, '\n')
                  else '' end,
             '\n[페이지 댓글]\n',
             pc.comments_text

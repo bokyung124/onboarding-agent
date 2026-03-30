@@ -14,13 +14,14 @@ with db_pages as (
         p.properties_json
     from {{ ref('stg_notion_pages') }} p
     where p.parent_type = 'database_id'
-      and p.properties_json is not null
+    and p.properties_json is not null
 ),
 
 flattened as (
     select
         page_id,
         database_id,
+        properties_json,
         json_value(properties_json, '$.Status.status.name') as status,
         json_value(properties_json, '$.상태.status.name') as status_kr,
         json_value(properties_json, '$.담당자.people[0].name') as assignee,

@@ -26,6 +26,7 @@ select
     coalesce(dp.status, dp.status_kr, '') as status,
     coalesce(dp.assignee, '') as assignee,
     coalesce(dp.tags, '') as tags,
+    dp.properties_json,
     b.last_edited_at,
     char_length(c.full_markdown) as content_length
 from {{ ref('int_notion_page_breadcrumbs') }} b

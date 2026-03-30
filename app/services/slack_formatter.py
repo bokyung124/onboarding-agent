@@ -1,6 +1,17 @@
 """SearchResponse를 Slack Block Kit 형식으로 변환한다."""
 
+import re
+
 from app.models.response import SearchResponse
+
+
+def _to_mrkdwn(text: str) -> str:
+    """마크다운을 Slack mrkdwn으로 변환한다."""
+    # **bold** → *bold*
+    text = re.sub(r"\*\*(.+?)\*\*", r"*\1*", text)
+    # ### heading → *heading*
+    text = re.sub(r"^#{1,6}\s+(.+)$", r"*\1*", text, flags=re.MULTILINE)
+    return text
 
 
 def format_answer_blocks(response: SearchResponse) -> list[dict]:
@@ -8,7 +19,7 @@ def format_answer_blocks(response: SearchResponse) -> list[dict]:
     blocks: list[dict] = [
         {
             "type": "section",
-            "text": {"type": "mrkdwn", "text": response.answer},
+            "text": {"type": "mrkdwn", "text": _to_mrkdwn(response.answer)},
         },
     ]
 

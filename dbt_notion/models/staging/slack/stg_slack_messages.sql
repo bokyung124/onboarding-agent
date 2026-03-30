@@ -14,7 +14,7 @@ deduplicated as (
     select
         *,
         row_number() over (
-            partition by channel_id, ts
+            partition by channel_id, cast(ts as string)
             order by _extracted_at desc
         ) as _rn
     from source
@@ -31,10 +31,8 @@ final as (
         text,
         reply_count,
         is_parent,
-        -- Unix timestamp 문자열 → TIMESTAMP 변환
-        timestamp_seconds(
-            cast(split(ts, '.')[offset(0)] as int64)
-        ) as message_at,
+        -- Unix timestamp (FLOAT64) → TIMESTAMP 변환
+        timestamp_seconds(cast(floor(ts) as int64)) as message_at,
         _extracted_at
     from deduplicated
     where _rn = 1

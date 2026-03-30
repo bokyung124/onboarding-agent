@@ -50,7 +50,8 @@ class SlackBotService:
     async def _handle_mention(self, event: dict, say) -> None:
         """채널에서 @멘션된 메시지를 처리한다."""
         query = _strip_mentions(event.get("text", ""))
-        await self._process_query(query, say)
+        thread_ts = event.get("thread_ts") or event.get("ts")
+        await self._process_query(query, say, thread_ts=thread_ts)
 
     async def _handle_dm(self, event: dict, say) -> None:
         """DM 메시지를 처리한다."""
@@ -62,10 +63,10 @@ class SlackBotService:
         query = _strip_mentions(event.get("text", ""))
         await self._process_query(query, say)
 
-    async def _process_query(self, query: str, say) -> None:
+    async def _process_query(self, query: str, say, thread_ts: str | None = None) -> None:
         """쿼리를 검색하고 결과를 Slack으로 전송한다."""
         if not query:
-            await say("질문을 입력해 주세요.")
+            await say("질문을 입력해 주세요.", thread_ts=thread_ts)
             return
 
         category = "all"
@@ -79,4 +80,4 @@ class SlackBotService:
             self._cache.set(category, query, response)
 
         blocks = format_answer_blocks(response)
-        await say(blocks=blocks, text=fallback_text(response))
+        await say(blocks=blocks, text=fallback_text(response), thread_ts=thread_ts)

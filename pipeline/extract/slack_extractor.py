@@ -2,6 +2,7 @@
 
 import logging
 import re
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 
 from slack_sdk.web.async_client import AsyncWebClient
@@ -60,14 +61,20 @@ class SlackExtractor:
         if hasattr(self._client, "session") and self._client.session:
             await self._client.session.close()
 
-    async def extract_all(self, since_ts: str | None = None) -> tuple[list[dict], list[dict]]:
+    async def extract_all(
+        self,
+        since_ts: str | None = None,
+        on_channel_done: Callable[[list[dict]], Awaitable[None]] | None = None,
+    ) -> tuple[list[dict], list[dict]]:
         """채널 메시지와 유저 정보를 추출한다.
 
         Args:
             since_ts: Unix timestamp 문자열. 이후 메시지만 추출 (증분).
+            on_channel_done: 채널별 메시지 수집 완료 시 호출되는 async 콜백.
+                             제공되면 채널별로 즉시 호출하고 메모리에 누적하지 않는다.
 
         Returns:
-            (messages, users) 튜플.
+            (messages, users) 튜플. on_channel_done이 제공된 경우 messages는 빈 리스트.
         """
         extracted_at = datetime.now(timezone.utc).isoformat()
 
@@ -82,15 +89,12 @@ class SlackExtractor:
         # 3. 채널별 메시지 수집
         all_messages: list[dict] = []
         for channel_id, channel_name in channels:
-            messages = await self._fetch_channel_messages(
-                channel_id, channel_name, since_ts, extracted_at
-            )
-            all_messages.extend(messages)
-            logger.info(
-                "  #%s: %d messages extracted",
-                channel_name,
-                len(messages),
-            )
+            messages = await self._fetch_channel_messages(channel_id, channel_name, since_ts, extracted_at)
+            logger.info("  #%s: %d messages extracted", channel_name, len(messages))
+            if on_channel_done is not None:
+                await on_channel_done(messages)
+            else:
+                all_messages.extend(messages)
 
         logger.info("Total messages extracted: %d", len(all_messages))
         return all_messages, user_records
@@ -141,9 +145,7 @@ class SlackExtractor:
             channels: list[tuple[str, str]] = []
             for cid in self._channel_ids:
                 try:
-                    resp = await slack_rate_limited_call(
-                        self._client.conversations_info, channel=cid
-                    )
+                    resp = await slack_rate_limited_call(self._client.conversations_info, channel=cid)
                     name = resp["channel"]["name"]
                     channels.append((cid, name))
                 except Exception:
@@ -219,9 +221,7 @@ class SlackExtractor:
 
                 # 스레드 답글 수집 (reply_count > 0인 부모 메시지만)
                 if is_parent and reply_count > 0:
-                    replies = await self._fetch_thread_replies(
-                        channel_id, channel_name, ts, extracted_at
-                    )
+                    replies = await self._fetch_thread_replies(channel_id, channel_name, ts, extracted_at)
                     messages.extend(replies)
 
             cursor = response.get("response_metadata", {}).get("next_cursor")
