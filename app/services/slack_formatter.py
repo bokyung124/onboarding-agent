@@ -11,6 +11,8 @@ def _to_mrkdwn(text: str) -> str:
     text = re.sub(r"\*\*(.+?)\*\*", r"*\1*", text)
     # ### heading → *heading*
     text = re.sub(r"^#{1,6}\s+(.+)$", r"*\1*", text, flags=re.MULTILINE)
+    # [text](url) → <url|text>
+    text = re.sub(r"\[([^\]]+)\]\((https?://[^\)]+)\)", r"<\2|\1>", text)
     return text
 
 

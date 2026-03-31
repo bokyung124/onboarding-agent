@@ -5,7 +5,7 @@ from collections import deque
 from datetime import datetime, timezone
 from typing import Protocol
 
-from notion_client import AsyncClient
+from notion_client import APIResponseError, AsyncClient
 
 from pipeline.extract.rate_limiter import rate_limited_call
 
@@ -146,6 +146,8 @@ class NotionExtractor:
     """Notion API에서 페이지, 블록, 데이터베이스를 BFS로 추출한다."""
 
     def __init__(self, api_key: str, root_page_id: str | None = None):
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+        logging.getLogger("httpcore").setLevel(logging.WARNING)
         self._client = AsyncClient(auth=api_key)
         self._root_page_id = root_page_id
         self._visited_pages: set[str] = set()
@@ -324,6 +326,16 @@ class NotionExtractor:
                     start_cursor=cursor,
                     page_size=100,
                 )
+            except APIResponseError as exc:
+                if exc.status == 404:
+                    logger.debug(
+                        "Block not accessible (404, not shared): %s", parent_block_id or page_id
+                    )
+                else:
+                    logger.warning(
+                        "Failed to list blocks for %s", parent_block_id or page_id, exc_info=True
+                    )
+                break
             except Exception:
                 logger.warning(
                     "Failed to list blocks for %s", parent_block_id or page_id, exc_info=True
@@ -400,6 +412,12 @@ class NotionExtractor:
                         start_cursor=cursor,
                         page_size=100,
                     )
+                except APIResponseError as exc:
+                    if exc.status == 404:
+                        logger.debug("Comment not accessible (404, not shared): %s", target_id)
+                    else:
+                        logger.warning("Failed to list comments for %s", target_id, exc_info=True)
+                    break
                 except Exception:
                     logger.warning(
                         "Failed to list comments for %s",
@@ -448,6 +466,12 @@ class NotionExtractor:
                     method="POST",
                     body=body,
                 )
+            except APIResponseError as exc:
+                if exc.status == 404:
+                    logger.debug("Database not accessible (404, not shared): %s", database_id)
+                else:
+                    logger.warning("Failed to query database %s", database_id, exc_info=True)
+                break
             except Exception:
                 logger.warning("Failed to query database %s", database_id, exc_info=True)
                 break
@@ -472,6 +496,12 @@ class NotionExtractor:
 
         try:
             db = await rate_limited_call(self._client.databases.retrieve, database_id=database_id)
+        except APIResponseError as exc:
+            if exc.status == 404:
+                logger.debug("Database not accessible (404, not shared): %s", database_id)
+            else:
+                logger.warning("Failed to retrieve database %s", database_id, exc_info=True)
+            return None
         except Exception:
             logger.warning("Failed to retrieve database %s", database_id, exc_info=True)
             return None

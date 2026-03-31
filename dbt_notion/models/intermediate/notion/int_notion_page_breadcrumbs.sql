@@ -23,9 +23,10 @@ with recursive page_hierarchy as (
         0 as depth,
         case
             when lower(page_title) like '%마케팅%'
-                or lower(page_title) like '%onboarding%' then 'marketing'
-            when lower(page_title) = 'tech' then 'tech'
-            when lower(page_title) = 'tools' then 'tools'
+                or lower(page_title) like '%onboarding%' 
+                or lower(page_title) like '%프로젝트%' then 'marketing'
+            when lower(page_title) = 'NNT Tech' then 'tech'
+            when lower(page_title) = 'NNT Tools' then 'tools'
             else 'uncategorized'
         end as category,
         cast(null as string) as client_name,

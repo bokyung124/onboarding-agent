@@ -24,10 +24,10 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 def main() -> None:
     project_id = os.getenv("GCP_PROJECT_ID")
     dataset = os.getenv("BQ_DATASET", "onboarding_agent")
-    gemini_api_key = os.getenv("GEMINI_API_KEY")
-
     bq_client = bigquery.Client(project=project_id)
-    genai_client = genai.Client(api_key=gemini_api_key)
+    genai_client = genai.Client(
+        api_key=os.getenv("GEMINI_API_KEY"),
+    )
 
     # 1. 변경된 청크 감지
     logging.info("Detecting changed chunks...")

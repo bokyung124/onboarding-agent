@@ -1,5 +1,7 @@
 """FastAPI 앱 엔트리포인트."""
 
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 from functools import lru_cache
 
@@ -13,8 +15,11 @@ from app.config import Settings
 from app.routers import categories, health, search
 from app.services.embedder import EmbedderService
 from app.services.llm import LLMService
+from app.services.reranker import RerankerService
 from app.services.search_orchestrator import SearchOrchestrator
 from app.services.vector_search import VectorSearchService
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 
 @lru_cache
@@ -34,12 +39,13 @@ async def lifespan(app: FastAPI):
     embedder = EmbedderService(genai_client, model=settings.gemini_embedding_model)
     vector_search = VectorSearchService(bq_client, settings)
     llm = LLMService(genai_client, model=settings.gemini_model)
-    orchestrator = SearchOrchestrator(embedder, vector_search, llm)
+    reranker = RerankerService(project_id=settings.gcp_project_id)
     cache = SearchCache(maxsize=settings.cache_max_size, ttl=settings.cache_ttl_seconds)
+    orchestrator = SearchOrchestrator(embedder, vector_search, llm, reranker=reranker, cache=cache)
 
     # app.state에 주입
     app.state.orchestrator = orchestrator
-    app.state.cache = cache
+    app.state.settings = settings
 
     # Slack Bot (토큰 설정 시에만 시작)
     slack_bot = None
@@ -50,9 +56,8 @@ async def lifespan(app: FastAPI):
             bot_token=settings.slack_bot_token,
             app_token=settings.slack_app_token,
             orchestrator=orchestrator,
-            cache=cache,
         )
-        await slack_bot.start()
+        asyncio.create_task(slack_bot.start())
 
     yield
 
@@ -63,7 +68,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="온보딩 에이전트",
-    description="노션 데이터 기반 사내 온보딩 에이전트 API",
+    description="노션, 슬랙 데이터 기반 사내 온보딩 에이전트 API",
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -75,6 +80,7 @@ app.include_router(search.router)
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    logging.getLogger(__name__).exception("Unhandled exception: %s %s", request.method, request.url)
     return JSONResponse(
         status_code=500,
         content={"detail": f"Internal server error: {type(exc).__name__}"},

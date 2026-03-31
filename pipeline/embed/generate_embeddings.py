@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from google import genai
 from google.cloud import bigquery
+from google.genai import types
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +75,10 @@ def generate_embeddings(
         response = genai_client.models.embed_content(
             model=EMBEDDING_MODEL,
             contents=texts,
+            config=types.EmbedContentConfig(
+                task_type="RETRIEVAL_DOCUMENT",
+                output_dimensionality=EMBEDDING_DIMENSIONS,
+            ),
         )
 
         for j, embedding in enumerate(response.embeddings):

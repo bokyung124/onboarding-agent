@@ -64,16 +64,12 @@ def detect_and_embed(**context) -> int:
     bq_client = bigquery.Client(project=project_id)
     genai_client = genai.Client(api_key=gemini_api_key)
 
-    # 1. 변경된 청크 감지 (mart_enterprise_chunks)
     changed_chunks = detect_changed_chunks(bq_client, project_id, dataset)
     if not changed_chunks:
         logger.info("No changed chunks to embed")
         return 0
 
-    # 2. 임베딩 생성
     vectors = generate_embeddings(genai_client, changed_chunks)
-
-    # 3. BigQuery에 적재 (mart_enterprise_vectors)
     load_vectors_to_bigquery(bq_client, project_id, dataset, vectors)
 
     return len(vectors)

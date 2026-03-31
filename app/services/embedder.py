@@ -1,6 +1,7 @@
 """사용자 쿼리 텍스트를 Gemini 임베딩 벡터로 변환한다."""
 
 from google import genai
+from google.genai import types
 
 
 class EmbedderService:
@@ -13,5 +14,9 @@ class EmbedderService:
         response = self._client.models.embed_content(
             model=self._model,
             contents=text,
+            config=types.EmbedContentConfig(
+                task_type="RETRIEVAL_QUERY",
+                output_dimensionality=768,
+            ),
         )
         return response.embeddings[0].values

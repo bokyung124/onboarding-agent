@@ -16,7 +16,7 @@ class Settings(BaseSettings):
 
     # Gemini (답변 생성 + 임베딩)
     gemini_api_key: str
-    gemini_model: str = "gemini-2.0-flash"
+    gemini_model: str = "gemini-3-flash-preview"
     gemini_embedding_model: str = "gemini-embedding-2-preview"
 
     # Notion (파이프라인 전용, 서빙에서는 미사용)
@@ -30,9 +30,12 @@ class Settings(BaseSettings):
     slack_workspace: str = ""
 
     # 검색 설정
-    search_top_k: int = 24
+    search_top_k: int = 50
     search_result_limit: int = 8
     search_distance_threshold: float = 0.7
+
+    # 검색 타임아웃
+    search_timeout_seconds: float = 30.0
 
     # 캐시
     cache_ttl_seconds: int = 3600

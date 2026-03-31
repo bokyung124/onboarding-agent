@@ -11,3 +11,5 @@ class ChunkResult(BaseModel):
     source_url: str
     source_type: str = "notion"
     distance: float
+    last_edited_at: str | None = None
+    parent_content: str | None = None

@@ -35,7 +35,9 @@ async def main() -> None:
         if not messages:
             return
         disposition = (
-            bigquery.WriteDisposition.WRITE_TRUNCATE if first_flush else bigquery.WriteDisposition.WRITE_APPEND
+            bigquery.WriteDisposition.WRITE_TRUNCATE
+            if first_flush
+            else bigquery.WriteDisposition.WRITE_APPEND
         )
         first_flush = False
         loop = asyncio.get_event_loop()
@@ -45,7 +47,9 @@ async def main() -> None:
         )
         await loop.run_in_executor(
             None,
-            lambda: bq.load_table_from_json(messages, messages_table, job_config=job_config).result(),
+            lambda: bq.load_table_from_json(
+                messages, messages_table, job_config=job_config
+            ).result(),
         )
         logging.info("  raw_slack_messages: %d rows flushed", len(messages))
 

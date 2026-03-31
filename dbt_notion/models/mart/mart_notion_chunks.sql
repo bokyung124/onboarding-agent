@@ -66,6 +66,26 @@ page_comments as (
     group by page_id
 ),
 
+sections_with_overlap as (
+    select
+        page_id,
+        section_number,
+        case
+            when lag(section_text) over (partition by page_id order by section_number) is not null
+            then concat(
+                right(
+                    lag(section_text) over (partition by page_id order by section_number),
+                    500
+                ),
+                '\n',
+                section_text
+            )
+            else section_text
+        end as section_text,
+        char_length(section_text) as original_length
+    from sections
+),
+
 chunks as (
     select
         d.page_id,
@@ -79,30 +99,18 @@ chunks as (
         s.section_number,
         concat(d.page_id, '_', cast(s.section_number as string)) as chunk_id,
         concat(
-            '문서: ', d.page_title, '\n',
-            '경로: ', d.breadcrumb_path, '\n',
-            '카테고리: ', d.category, '\n',
-            case when d.client_name is not null and d.client_name != ''
-                 then concat('고객사: ', d.client_name, '\n')
-                 else '' end,
-            case when d.assignee is not null and d.assignee != ''
-                 then concat('담당자: ', d.assignee, '\n')
-                 else '' end,
-            case when d.properties_json is not null
-                 then concat('속성(JSON): ', d.properties_json, '\n')
-                 else '' end,
-            '\n',
             s.section_text,
             case when sc.comments_text is not null
                  then concat('\n\n[댓글/피드백]\n', sc.comments_text)
                  else '' end
         ) as chunk_text,
-        char_length(s.section_text) as chunk_length
+        s.original_length as chunk_length
     from {{ ref('mart_notion_documents') }} d
-    inner join sections s on d.page_id = s.page_id
+    inner join sections_with_overlap s on d.page_id = s.page_id
     left join section_comments sc
         on s.page_id = sc.page_id and s.section_number = sc.section_number
-    where char_length(s.section_text) > 20
+    where s.original_length > 20
+      and s.original_length <= 8000
 ),
 
 comment_chunks as (
@@ -118,16 +126,7 @@ comment_chunks as (
         999 as section_number,
         concat(d.page_id, '_comments') as chunk_id,
         concat(
-            '문서: ', d.page_title, '\n',
-            '경로: ', d.breadcrumb_path, '\n',
-            '카테고리: ', d.category, '\n',
-            case when d.client_name is not null and d.client_name != ''
-                 then concat('고객사: ', d.client_name, '\n')
-                 else '' end,
-            case when d.assignee is not null and d.assignee != ''
-                 then concat('담당자: ', d.assignee, '\n')
-                 else '' end,
-            '\n[페이지 댓글]\n',
+            '[페이지 댓글]\n',
             pc.comments_text
         ) as chunk_text,
         char_length(pc.comments_text) as chunk_length

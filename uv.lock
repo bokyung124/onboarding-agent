@@ -1247,6 +1247,22 @@ wheels = [
 ]
 
 [[package]]
+name = "google-cloud-discoveryengine"
+version = "0.17.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "google-api-core", extra = ["grpc"] },
+    { name = "google-auth" },
+    { name = "grpcio" },
+    { name = "proto-plus" },
+    { name = "protobuf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/dc/c2/b13881ceac96ce792aae01a13476123c77e215d9e2a81473c3a0c22355d2/google_cloud_discoveryengine-0.17.0.tar.gz", hash = "sha256:223fa2ba7798a393fc02bdc0a76dd39081309e66e61372ff471b6775a2eedb23", size = 3679454, upload-time = "2026-02-12T14:50:21.646Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/03/20/892cfbb4d8e4e26ece28141b3cb2554d3bf636bdb40635a249a2650eac1f/google_cloud_discoveryengine-0.17.0-py3-none-any.whl", hash = "sha256:f5489dbcedfd17589b2d5dc78d603a2e16a47cfa134deb72cdff18c5e547b301", size = 3374068, upload-time = "2026-02-12T14:49:58.597Z" },
+]
+
+[[package]]
 name = "google-cloud-resource-manager"
 version = "1.17.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2202,6 +2218,7 @@ dependencies = [
     { name = "dbt-bigquery" },
     { name = "fastapi" },
     { name = "google-cloud-bigquery" },
+    { name = "google-cloud-discoveryengine" },
     { name = "google-genai" },
     { name = "httpx" },
     { name = "notion-client" },
@@ -2237,6 +2254,7 @@ requires-dist = [
     { name = "dbt-bigquery", marker = "extra == 'pipeline'", specifier = ">=1.8" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "google-cloud-bigquery", specifier = ">=3.25" },
+    { name = "google-cloud-discoveryengine", specifier = ">=0.11" },
     { name = "google-genai", specifier = ">=1.0" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "notion-client", specifier = ">=3.0.0" },

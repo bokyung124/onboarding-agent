@@ -89,7 +89,9 @@ class SlackExtractor:
         # 3. 채널별 메시지 수집
         all_messages: list[dict] = []
         for channel_id, channel_name in channels:
-            messages = await self._fetch_channel_messages(channel_id, channel_name, since_ts, extracted_at)
+            messages = await self._fetch_channel_messages(
+                channel_id, channel_name, since_ts, extracted_at
+            )
             logger.info("  #%s: %d messages extracted", channel_name, len(messages))
             if on_channel_done is not None:
                 await on_channel_done(messages)
@@ -145,7 +147,9 @@ class SlackExtractor:
             channels: list[tuple[str, str]] = []
             for cid in self._channel_ids:
                 try:
-                    resp = await slack_rate_limited_call(self._client.conversations_info, channel=cid)
+                    resp = await slack_rate_limited_call(
+                        self._client.conversations_info, channel=cid
+                    )
                     name = resp["channel"]["name"]
                     channels.append((cid, name))
                 except Exception:
@@ -221,7 +225,9 @@ class SlackExtractor:
 
                 # 스레드 답글 수집 (reply_count > 0인 부모 메시지만)
                 if is_parent and reply_count > 0:
-                    replies = await self._fetch_thread_replies(channel_id, channel_name, ts, extracted_at)
+                    replies = await self._fetch_thread_replies(
+                        channel_id, channel_name, ts, extracted_at
+                    )
                     messages.extend(replies)
 
             cursor = response.get("response_metadata", {}).get("next_cursor")
