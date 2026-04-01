@@ -75,6 +75,19 @@ def detect_and_embed(**context) -> int:
     return len(vectors)
 
 
+def create_vector_index(**context) -> None:
+    """mart_enterprise_vectors에 IVF 벡터 인덱스가 없으면 생성한다."""
+    from google.cloud import bigquery
+
+    from pipeline.embed.generate_embeddings import ensure_vector_index
+
+    project_id = os.environ["GCP_PROJECT_ID"]
+    dataset = os.environ.get("BQ_DATASET", "onboarding_agent")
+    bq_client = bigquery.Client(project=project_id)
+
+    ensure_vector_index(bq_client, project_id, dataset)
+
+
 t_dbt = PythonOperator(
     task_id="run_dbt",
     python_callable=run_dbt,
@@ -87,4 +100,10 @@ t_embed = PythonOperator(
     dag=dag,
 )
 
-t_dbt >> t_embed
+t_ensure_index = PythonOperator(
+    task_id="ensure_vector_index",
+    python_callable=create_vector_index,
+    dag=dag,
+)
+
+t_dbt >> t_embed >> t_ensure_index

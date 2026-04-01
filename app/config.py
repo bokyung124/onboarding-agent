@@ -33,10 +33,27 @@ class Settings(BaseSettings):
     search_top_k: int = 50
     search_result_limit: int = 8
     search_distance_threshold: float = 0.7
+    search_fraction_lists: float = 0.3  # IVF 인덱스 recall 튜닝 (0.0~1.0)
+    reranker_enabled: bool = True
 
     # 검색 타임아웃
-    search_timeout_seconds: float = 30.0
+    search_timeout_seconds: float = 60.0
 
     # 캐시
     cache_ttl_seconds: int = 3600
     cache_max_size: int = 500
+
+    # 체크리스트
+    checklist_cache_ttl_seconds: int = 86400
+    checklist_cache_max_size: int = 20
+    checklist_top_k: int = 80
+    checklist_result_limit: int = 15
+
+    # 대화 맥락 (Multi-turn)
+    conversation_cache_ttl_seconds: int = 3600
+    conversation_cache_max_size: int = 200
+    conversation_max_turns: int = 5
+
+    # 멀티스텝 에이전트
+    multi_step_enabled: bool = True
+    multi_step_max_sub_queries: int = 3

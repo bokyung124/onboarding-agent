@@ -33,7 +33,7 @@ def detect_changed_chunks(bq_client: bigquery.Client, project_id: str, dataset: 
         query = f"""
         SELECT
             c.chunk_id, c.page_id, c.page_title, c.breadcrumb_path,
-            c.category, c.notion_url, c.client_name, c.tags,
+            c.category, c.is_onboarding, c.notion_url, c.client_name, c.tags,
             c.chunk_text, c.section_number, c.last_edited_at, c.source_type
         FROM `{project_id}.{mart_dataset}.mart_enterprise_chunks` c
         LEFT JOIN `{vectors_table}` v
@@ -47,7 +47,7 @@ def detect_changed_chunks(bq_client: bigquery.Client, project_id: str, dataset: 
         query = f"""
         SELECT
             chunk_id, page_id, page_title, breadcrumb_path,
-            category, notion_url, client_name, tags,
+            category, is_onboarding, notion_url, client_name, tags,
             chunk_text, section_number, last_edited_at, source_type
         FROM `{project_id}.{mart_dataset}.mart_enterprise_chunks`
         """
@@ -90,6 +90,7 @@ def generate_embeddings(
                     "page_title": chunk["page_title"],
                     "breadcrumb_path": chunk["breadcrumb_path"],
                     "category": chunk["category"],
+                    "is_onboarding": chunk.get("is_onboarding", False),
                     "notion_url": chunk["notion_url"],
                     "client_name": chunk.get("client_name", ""),
                     "tags": chunk.get("tags", ""),
@@ -151,6 +152,7 @@ def load_vectors_to_bigquery(
                 page_title = S.page_title,
                 breadcrumb_path = S.breadcrumb_path,
                 category = S.category,
+                is_onboarding = S.is_onboarding,
                 notion_url = S.notion_url,
                 client_name = S.client_name,
                 tags = S.tags,
@@ -162,11 +164,38 @@ def load_vectors_to_bigquery(
                 _embedded_at = S._embedded_at
         WHEN NOT MATCHED THEN
             INSERT (chunk_id, page_id, page_title, breadcrumb_path, category,
-                    notion_url, client_name, tags, chunk_text, section_number,
-                    source_type, embedding, last_edited_at, _embedded_at)
+                    is_onboarding, notion_url, client_name, tags, chunk_text,
+                    section_number, source_type, embedding, last_edited_at, _embedded_at)
             VALUES (S.chunk_id, S.page_id, S.page_title, S.breadcrumb_path, S.category,
-                    S.notion_url, S.client_name, S.tags, S.chunk_text, S.section_number,
-                    S.source_type, S.embedding, S.last_edited_at, S._embedded_at)
+                    S.is_onboarding, S.notion_url, S.client_name, S.tags, S.chunk_text,
+                    S.section_number, S.source_type, S.embedding, S.last_edited_at, S._embedded_at)
         """
         bq_client.query(merge_query).result()
         logger.info("Merged %d vectors into %s", len(vectors), vectors_table)
+
+
+def ensure_vector_index(
+    bq_client: bigquery.Client,
+    project_id: str,
+    dataset: str,
+) -> None:
+    """mart_enterprise_vectors에 IVF 벡터 인덱스가 없으면 생성한다."""
+    mart_dataset = f"{dataset}_mart_notion"
+    vectors_table = f"{project_id}.{mart_dataset}.mart_enterprise_vectors"
+
+    if not _table_exists(bq_client, vectors_table):
+        logger.info("Vectors table does not exist yet — skipping index creation")
+        return
+
+    ddl = f"""
+    CREATE VECTOR INDEX IF NOT EXISTS idx_enterprise_vectors_embedding
+    ON `{vectors_table}`(embedding)
+    STORING (category, is_onboarding, client_name, tags)
+    OPTIONS (
+        index_type = 'IVF',
+        distance_type = 'COSINE',
+        ivf_options = '{{"num_lists": 100}}'
+    )
+    """
+    bq_client.query(ddl).result()
+    logger.info("Vector index ensured on %s", vectors_table)

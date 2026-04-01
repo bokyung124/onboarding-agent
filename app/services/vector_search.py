@@ -1,12 +1,15 @@
 """BigQuery VECTOR_SEARCH를 호출하여 유사한 청크를 검색한다."""
 
 import asyncio
+import logging
 from functools import partial
 
 from google.cloud import bigquery
 
 from app.config import Settings
 from app.models.domain import ChunkResult
+
+logger = logging.getLogger(__name__)
 
 
 class VectorSearchService:
@@ -22,37 +25,52 @@ class VectorSearchService:
         result_limit: int | None = None,
         client_name: str | None = None,
         tags: str | None = None,
+        is_onboarding: bool = False,
     ) -> list[ChunkResult]:
-        """벡터 유사도 검색 후 카테고리/메타데이터 필터링하여 결과를 반환한다."""
-        top_k = top_k or self._settings.search_top_k
+        """BigQuery VECTOR_SEARCH로 유사 청크를 검색한다."""
+        # 카테고리 필터 시 post-filter로 걸러지므로 top_k를 넉넉히 확보
+        default_top_k = self._settings.search_top_k
+        if category != "all":
+            default_top_k = default_top_k * 3
+        top_k = top_k or default_top_k
         result_limit = result_limit or self._settings.search_result_limit
 
         project = self._settings.gcp_project_id
         dataset = self._settings.bq_mart_dataset
         table = self._settings.bq_vectors_table
 
-        where_conditions = ["distance <= @distance_threshold"]
         query_params = [
             bigquery.ArrayQueryParameter("query_embedding", "FLOAT64", query_embedding),
             bigquery.ScalarQueryParameter(
-                "distance_threshold", "FLOAT64", self._settings.search_distance_threshold
+                "distance_threshold",
+                "FLOAT64",
+                self._settings.search_distance_threshold,
             ),
         ]
 
+        # 항상 TABLE 참조로 IVF 인덱스를 활용하고, post-filter로 카테고리 필터링
+        table_expr = f"TABLE `{project}.{dataset}.{table}`"
+
+        # Post-filter 조건
+        post_filter_conditions: list[str] = ["distance <= @distance_threshold"]
         if category != "all":
-            where_conditions.append("base.category = @category")
+            post_filter_conditions.append("base.category = @category")
             query_params.append(bigquery.ScalarQueryParameter("category", "STRING", category))
         if client_name:
-            where_conditions.append("base.client_name = @client_name")
+            post_filter_conditions.append("base.client_name = @client_name")
             query_params.append(bigquery.ScalarQueryParameter("client_name", "STRING", client_name))
         if tags:
-            where_conditions.append("base.tags LIKE @tags_pattern")
+            post_filter_conditions.append("base.tags LIKE @tags_pattern")
             query_params.append(
                 bigquery.ScalarQueryParameter("tags_pattern", "STRING", f"%{tags}%")
             )
+        if is_onboarding:
+            post_filter_conditions.append("base.is_onboarding = TRUE")
+        post_filter_where = " AND ".join(post_filter_conditions)
 
-        where_clause = ("WHERE " + " AND ".join(where_conditions)) if where_conditions else ""
+        fraction = self._settings.search_fraction_lists
 
+        # 벡터 검색만 수행 (CTE/JOIN 제거로 IVF 인덱스 최적화 보장)
         query = f"""
         SELECT
             base.chunk_id,
@@ -64,22 +82,24 @@ class VectorSearchService:
             base.notion_url AS source_url,
             base.source_type,
             base.last_edited_at,
+            base.client_name,
+            base.tags,
             distance
         FROM VECTOR_SEARCH(
-            TABLE `{project}.{dataset}.{table}`,
+            {table_expr},
             'embedding',
             (SELECT @query_embedding AS embedding),
             top_k => {top_k},
-            distance_type => 'COSINE'
+            distance_type => 'COSINE',
+            options => '{{"fraction_lists_to_search": {fraction}}}'
         )
-        {where_clause}
+        WHERE {post_filter_where}
         ORDER BY distance ASC
         LIMIT {result_limit}
         """
 
         job_config = bigquery.QueryJobConfig(query_parameters=query_params)
 
-        # BigQuery 클라이언트는 동기 → executor로 async 래핑
         loop = asyncio.get_running_loop()
         rows = await loop.run_in_executor(None, partial(self._execute_query, query, job_config))
 
@@ -94,41 +114,11 @@ class VectorSearchService:
                 source_url=row.source_url,
                 source_type=row.source_type,
                 distance=row.distance,
-                last_edited_at=str(row.last_edited_at) if row.last_edited_at else None,
+                last_edited_at=(str(row.last_edited_at) if row.last_edited_at else None),
+                client_name=row.client_name or None,
+                tags=row.tags or None,
             )
             for row in rows
-        ]
-
-    async def enrich_with_parent_context(
-        self, chunks: list[ChunkResult], top_n: int = 3
-    ) -> list[ChunkResult]:
-        """상위 top_n개 notion 청크에 부모 페이지 전체 본문(full_markdown)을 주입한다."""
-        notion_chunks = [c for c in chunks[:top_n] if c.source_type == "notion"]
-        if not notion_chunks:
-            return chunks
-
-        page_ids = list({c.page_id for c in notion_chunks})
-        project = self._settings.gcp_project_id
-        dataset = self._settings.bq_mart_dataset
-
-        query = f"""
-        SELECT page_id, full_markdown
-        FROM `{project}.{dataset}.mart_notion_documents`
-        WHERE page_id IN UNNEST(@page_ids)
-        """
-        job_config = bigquery.QueryJobConfig(
-            query_parameters=[bigquery.ArrayQueryParameter("page_ids", "STRING", page_ids)]
-        )
-
-        loop = asyncio.get_running_loop()
-        rows = await loop.run_in_executor(None, partial(self._execute_query, query, job_config))
-        parent_map = {row.page_id: row.full_markdown for row in rows}
-
-        return [
-            chunk.model_copy(update={"parent_content": parent_map[chunk.page_id]})
-            if chunk.source_type == "notion" and chunk.page_id in parent_map
-            else chunk
-            for chunk in chunks
         ]
 
     @property
@@ -136,4 +126,13 @@ class VectorSearchService:
         return self._settings.search_result_limit
 
     def _execute_query(self, query: str, job_config: bigquery.QueryJobConfig) -> list:
-        return list(self._client.query(query, job_config=job_config).result())
+        job = self._client.query(query, job_config=job_config)
+        rows = list(job.result())
+        logger.info(
+            "bq_stats slot_ms=%s bytes=%s stages=%d rows=%d",
+            job.slot_millis,
+            job.total_bytes_processed,
+            len(job.query_plan) if job.query_plan else 0,
+            len(rows),
+        )
+        return rows

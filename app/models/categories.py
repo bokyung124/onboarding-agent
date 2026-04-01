@@ -13,3 +13,21 @@ CATEGORY_DEFS: list[tuple[str, str, str, str]] = [
 ]
 
 CATEGORY_NAMES: dict[str, str] = {slug: name for slug, name, *_ in CATEGORY_DEFS}
+
+# 온보딩 전용 카테고리
+OnboardingCategorySlug = Literal["all", "seo", "crm", "aso", "pa", "ua", "cro", "tech"]
+
+ONBOARDING_CATEGORY_DEFS: list[tuple[str, str, str, str]] = [
+    ("all", "전체", "전체검색", "전체 온보딩"),
+    ("seo", "SEO", "SEO", "SEO"),
+    ("crm", "CRM", "CRM", "CRM"),
+    ("aso", "ASO", "ASO", "ASO"),
+    ("pa", "PA", "PA", "PA"),
+    ("ua", "UA", "UA", "UA"),
+    ("cro", "CRO", "CRO", "CRO"),
+    ("tech", "개발", "개발", "개발 (Dev)"),
+]
+
+ONBOARDING_CATEGORY_NAMES: dict[str, str] = {
+    slug: name for slug, name, *_ in ONBOARDING_CATEGORY_DEFS
+}

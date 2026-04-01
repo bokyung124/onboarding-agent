@@ -18,7 +18,11 @@ async def test_orchestrator_returns_answer_with_sources(
     mock_vector_search.search.return_value = sample_chunks
 
     mock_llm = AsyncMock()
-    mock_llm.generate_answer.return_value = "Jira 프로젝트를 먼저 생성합니다 [출처 1]"
+    mock_llm.generate_answer.return_value = (
+        "Jira 프로젝트를 먼저 생성합니다 [출처 1]",
+        [1, 2],
+        ["Git 저장소 설정 방법은?", "Docker 환경 구성은 어떻게 하나요?"],
+    )
 
     orchestrator = SearchOrchestrator(
         embedder=mock_embedder,
@@ -35,6 +39,8 @@ async def test_orchestrator_returns_answer_with_sources(
     assert response.category == "tech"
     assert response.metadata.chunks_retrieved == 2
     assert response.metadata.latency_ms >= 0
+    assert len(response.follow_up_questions) == 2
+    assert "Git 저장소 설정 방법은?" in response.follow_up_questions
 
 
 @pytest.mark.asyncio
@@ -69,7 +75,7 @@ async def test_orchestrator_deduplicates_sources(mock_embedder: MagicMock):
     mock_vector_search.search.return_value = duplicate_chunks
 
     mock_llm = AsyncMock()
-    mock_llm.generate_answer.return_value = "답변"
+    mock_llm.generate_answer.return_value = ("답변", [1, 2], [])
 
     orchestrator = SearchOrchestrator(
         embedder=mock_embedder,
@@ -115,7 +121,7 @@ async def test_orchestrator_mixed_notion_slack_sources(mock_embedder: MagicMock)
     mock_vector_search.search.return_value = mixed_chunks
 
     mock_llm = AsyncMock()
-    mock_llm.generate_answer.return_value = "답변 [출처 1] [출처 2]"
+    mock_llm.generate_answer.return_value = ("답변 [출처 1] [출처 2]", [1, 2], [])
 
     orchestrator = SearchOrchestrator(
         embedder=mock_embedder,
@@ -139,7 +145,9 @@ async def test_orchestrator_empty_chunks(mock_embedder: MagicMock):
 
     mock_llm = AsyncMock()
     mock_llm.generate_answer.return_value = (
-        "관련 문서를 찾지 못했습니다. 다른 검색어로 시도해 주세요."
+        "관련 문서를 찾지 못했습니다. 다른 검색어로 시도해 주세요.",
+        [],
+        [],
     )
 
     orchestrator = SearchOrchestrator(

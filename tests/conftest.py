@@ -41,5 +41,44 @@ def mock_embedder() -> MagicMock:
 
 
 @pytest.fixture
+def sample_onboarding_chunks() -> list[ChunkResult]:
+    return [
+        ChunkResult(
+            chunk_id="seo_page1_0",
+            page_id="seo-basics",
+            page_title="SEO 기초 가이드",
+            breadcrumb="SEO > 온보딩 > 기초 가이드",
+            category="seo",
+            content="SEO의 기본 개념과 검색엔진 작동 원리를 설명합니다.",
+            source_url="https://notion.so/seo-basics",
+            source_type="notion",
+            distance=0.1,
+        ),
+        ChunkResult(
+            chunk_id="seo_page2_0",
+            page_id="seo-tools",
+            page_title="SEO 도구 사용법",
+            breadcrumb="SEO > 온보딩 > 도구 사용법",
+            category="seo",
+            content="Google Search Console과 GA4 설정 방법을 안내합니다.",
+            source_url="https://notion.so/seo-tools",
+            source_type="notion",
+            distance=0.15,
+        ),
+        ChunkResult(
+            chunk_id="seo_page3_0",
+            page_id="seo-workflow",
+            page_title="SEO 업무 프로세스",
+            breadcrumb="SEO > 온보딩 > 업무 프로세스",
+            category="seo",
+            content="키워드 리서치부터 콘텐츠 최적화까지 전체 워크플로우입니다.",
+            source_url="https://notion.so/seo-workflow",
+            source_type="notion",
+            distance=0.2,
+        ),
+    ]
+
+
+@pytest.fixture
 def mock_bq_client() -> MagicMock:
     return MagicMock()

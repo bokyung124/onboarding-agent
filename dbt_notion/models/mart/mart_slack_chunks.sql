@@ -15,6 +15,7 @@ with chunks as (
         concat('#', t.channel_name) as page_title,
         concat('Slack > #', t.channel_name) as breadcrumb_path,
         coalesce(cc.category, 'uncategorized') as category,
+        false as is_onboarding,
         concat(
             'https://{{ env_var("SLACK_WORKSPACE", "workspace") }}.slack.com/archives/',
             t.channel_id,

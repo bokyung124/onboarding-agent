@@ -10,9 +10,11 @@ from fastapi.responses import JSONResponse
 from google import genai
 from google.cloud import bigquery
 
-from app.cache import SearchCache
+from app.cache import ChecklistCache, ConversationCache, SearchCache
 from app.config import Settings
-from app.routers import categories, health, search
+from app.routers import analytics as analytics_router
+from app.routers import categories, health, onboarding, search
+from app.services.analytics import SearchAnalytics
 from app.services.embedder import EmbedderService
 from app.services.llm import LLMService
 from app.services.reranker import RerankerService
@@ -39,12 +41,47 @@ async def lifespan(app: FastAPI):
     embedder = EmbedderService(genai_client, model=settings.gemini_embedding_model)
     vector_search = VectorSearchService(bq_client, settings)
     llm = LLMService(genai_client, model=settings.gemini_model)
-    reranker = RerankerService(project_id=settings.gcp_project_id)
+    reranker = (
+        RerankerService(project_id=settings.gcp_project_id) if settings.reranker_enabled else None
+    )
+    logging.getLogger(__name__).info(
+        "reranker_enabled=%s reranker=%s",
+        settings.reranker_enabled,
+        "ON" if reranker else "OFF",
+    )
     cache = SearchCache(maxsize=settings.cache_max_size, ttl=settings.cache_ttl_seconds)
-    orchestrator = SearchOrchestrator(embedder, vector_search, llm, reranker=reranker, cache=cache)
+    checklist_cache = ChecklistCache(
+        maxsize=settings.checklist_cache_max_size,
+        ttl=settings.checklist_cache_ttl_seconds,
+    )
+    conversation_cache = ConversationCache(
+        maxsize=settings.conversation_cache_max_size,
+        ttl=settings.conversation_cache_ttl_seconds,
+        max_turns=settings.conversation_max_turns,
+    )
+    analytics = SearchAnalytics(
+        bq_client=bq_client,
+        project_id=settings.gcp_project_id,
+        dataset=settings.bq_dataset,
+    )
+    # 테이블 생성은 백그라운드에서 (startup 블로킹 방지)
+    asyncio.create_task(analytics.ensure_table())
+
+    orchestrator = SearchOrchestrator(
+        embedder,
+        vector_search,
+        llm,
+        reranker=reranker,
+        cache=cache,
+        checklist_cache=checklist_cache,
+        analytics=analytics,
+    )
 
     # app.state에 주입
     app.state.orchestrator = orchestrator
+    app.state.cache = cache
+    app.state.checklist_cache = checklist_cache
+    app.state.conversation_cache = conversation_cache
     app.state.settings = settings
 
     # Slack Bot (토큰 설정 시에만 시작)
@@ -56,11 +93,14 @@ async def lifespan(app: FastAPI):
             bot_token=settings.slack_bot_token,
             app_token=settings.slack_app_token,
             orchestrator=orchestrator,
+            search_timeout=settings.search_timeout_seconds,
+            conversation_cache=conversation_cache,
         )
         asyncio.create_task(slack_bot.start())
 
     yield
 
+    await analytics.flush()
     if slack_bot:
         await slack_bot.stop()
     bq_client.close()
@@ -76,6 +116,8 @@ app = FastAPI(
 app.include_router(health.router)
 app.include_router(categories.router)
 app.include_router(search.router)
+app.include_router(onboarding.router)
+app.include_router(analytics_router.router)
 
 
 @app.exception_handler(Exception)

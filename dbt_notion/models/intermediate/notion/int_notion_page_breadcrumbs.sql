@@ -23,12 +23,22 @@ with recursive page_hierarchy as (
         0 as depth,
         case
             when lower(page_title) like '%마케팅%'
-                or lower(page_title) like '%onboarding%' 
                 or lower(page_title) like '%프로젝트%' then 'marketing'
+            when lower(page_title) like '%seo%' then 'seo'
+            when lower(page_title) like '%crm%' then 'crm'
+            when lower(page_title) like '%aso%' then 'aso'
+            when lower(page_title) like '%pa%' then 'pa'
+            when lower(page_title) like '%ua%' then 'ua'
+            when lower(page_title) like '%cro%' then 'cro'
             when lower(page_title) = 'NNT Tech' then 'tech'
             when lower(page_title) = 'NNT Tools' then 'tools'
             else 'uncategorized'
         end as category,
+        case
+            when lower(page_title) like '%온보딩%'
+                or lower(page_title) like '%onboarding%' then true
+            else false
+        end as is_onboarding,
         cast(null as string) as client_name,
         notion_url,
         last_edited_at
@@ -46,6 +56,12 @@ with recursive page_hierarchy as (
         concat(parent.breadcrumb_path, ' > ', child.page_title) as breadcrumb_path,
         parent.depth + 1,
         parent.category,
+        case
+            when parent.is_onboarding then true
+            when lower(child.page_title) like '%온보딩%'
+                or lower(child.page_title) like '%onboarding%' then true
+            else false
+        end as is_onboarding,
         case
             when parent.depth = 0 then child.page_title  -- depth=1의 자식 → 고객사
             else parent.client_name

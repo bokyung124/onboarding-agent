@@ -17,6 +17,7 @@ select
     b.page_title,
     b.breadcrumb_path,
     b.category,
+    b.is_onboarding,
     b.client_name,
     b.depth,
     b.notion_url,

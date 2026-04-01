@@ -58,15 +58,19 @@ ENV_VARS+=",SLACK_APP_TOKEN=${SLACK_APP_TOKEN}"
 if [[ -n "${SLACK_WORKSPACE}" ]]; then
   ENV_VARS+=",SLACK_WORKSPACE=${SLACK_WORKSPACE}"
 fi
+if [[ -n "${RERANKER_ENABLED}" ]]; then
+  ENV_VARS+=",RERANKER_ENABLED=${RERANKER_ENABLED}"
+fi
 
 if gcloud run services describe "${SERVICE_NAME}" \
     --region "${REGION}" \
     --project "${GCP_PROJECT_ID}" &>/dev/null; then
-  echo "  기존 서비스 감지 → 이미지만 업데이트"
+  echo "  기존 서비스 감지 → 이미지 + 환경변수 업데이트"
   gcloud run deploy "${SERVICE_NAME}" \
     --image "${IMAGE}" \
     --region "${REGION}" \
-    --project "${GCP_PROJECT_ID}"
+    --project "${GCP_PROJECT_ID}" \
+    --update-env-vars "${ENV_VARS}"
 else
   echo "  신규 서비스 생성"
   gcloud run deploy "${SERVICE_NAME}" \

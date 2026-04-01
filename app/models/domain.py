@@ -13,3 +13,5 @@ class ChunkResult(BaseModel):
     distance: float
     last_edited_at: str | None = None
     parent_content: str | None = None
+    client_name: str | None = None
+    tags: str | None = None

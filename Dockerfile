@@ -7,8 +7,9 @@ COPY pyproject.toml uv.lock ./
 RUN pip install uv --quiet --root-user-action=ignore && uv sync --no-dev --no-install-project \
     --no-extra pipeline
 
-# 서빙 소스만 복사
+# 서빙 소스 + 드립 캠페인 파이프라인 복사
 COPY app/ ./app/
+COPY pipeline/ ./pipeline/
 
 ENV PORT=8080
 
