@@ -12,7 +12,7 @@ select
     countif(success = true and chunks_retrieved > 0) as successful_searches,
     countif(success = false or chunks_retrieved = 0) as failed_searches,
     cast(avg(latency_ms) as int64) as avg_latency_ms
-from `{{ env_var("GCP_PROJECT_ID") }}.{{ env_var("BQ_DATASET", "onboarding_agent") }}.analytics_search_logs`
+from {{ source('analytics', 'analytics_search_logs') }}
 where timestamp >= timestamp_sub(current_timestamp(), interval 30 day)
 group by search_date
 order by search_date desc

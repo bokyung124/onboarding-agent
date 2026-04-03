@@ -13,7 +13,7 @@ select
     cast(avg(latency_ms) as int64) as avg_latency_ms,
     min(timestamp) as first_seen,
     max(timestamp) as last_seen
-from `{{ env_var("GCP_PROJECT_ID") }}.{{ env_var("BQ_DATASET", "onboarding_agent") }}.analytics_search_logs`
+from {{ source('analytics', 'analytics_search_logs') }}
 where timestamp >= timestamp_sub(current_timestamp(), interval 7 day)
   and (success = false or chunks_retrieved = 0)
 group by query, category

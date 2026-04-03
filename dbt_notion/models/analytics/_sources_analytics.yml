@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: analytics
+    description: FastAPI 앱에서 검색 요청 시 기록하는 로그 테이블
+    database: "{{ env_var('GCP_PROJECT_ID') }}"
+    schema: onboarding_agent
+    tables:
+      - name: analytics_search_logs
+        description: 검색 요청 로그 (쿼리, 카테고리, 지연시간, 성공여부 등)

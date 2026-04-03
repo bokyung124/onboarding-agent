@@ -103,6 +103,16 @@ class VectorSearchService:
         loop = asyncio.get_running_loop()
         rows = await loop.run_in_executor(None, partial(self._execute_query, query, job_config))
 
+        if not rows:
+            logger.warning(
+                "vector_search returned 0 results. category=%s is_onboarding=%s "
+                "distance_threshold=%s top_k=%s",
+                category,
+                is_onboarding,
+                self._settings.search_distance_threshold,
+                top_k,
+            )
+
         return [
             ChunkResult(
                 chunk_id=row.chunk_id,

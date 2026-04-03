@@ -3,9 +3,9 @@
 import asyncio
 from functools import partial
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 from google.cloud import bigquery
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -51,7 +51,7 @@ def _run_query(bq_client: bigquery.Client, sql: str) -> list[dict]:
 
 
 @router.get("/top-queries", response_model=TopQueriesResponse)
-async def top_queries(request: Request, days: int = Field(default=7, ge=1, le=90)):
+async def top_queries(request: Request, days: int = Query(default=7, ge=1, le=90)):
     """최근 N일간 빈도순 상위 50개 쿼리."""
     settings = request.app.state.settings
     table = f"{settings.gcp_project_id}.{settings.bq_dataset}.analytics_search_logs"
@@ -72,7 +72,7 @@ async def top_queries(request: Request, days: int = Field(default=7, ge=1, le=90
 
 
 @router.get("/failed-queries", response_model=FailedQueriesResponse)
-async def failed_queries(request: Request, days: int = Field(default=7, ge=1, le=90)):
+async def failed_queries(request: Request, days: int = Query(default=7, ge=1, le=90)):
     """최근 N일간 실패(청크 0개 또는 success=false) 쿼리."""
     settings = request.app.state.settings
     table = f"{settings.gcp_project_id}.{settings.bq_dataset}.analytics_search_logs"
@@ -94,7 +94,7 @@ async def failed_queries(request: Request, days: int = Field(default=7, ge=1, le
 
 
 @router.get("/daily-volume", response_model=DailyVolumeResponse)
-async def daily_volume(request: Request, days: int = Field(default=30, ge=1, le=90)):
+async def daily_volume(request: Request, days: int = Query(default=30, ge=1, le=90)):
     """최근 N일간 일별 검색 건수."""
     settings = request.app.state.settings
     table = f"{settings.gcp_project_id}.{settings.bq_dataset}.analytics_search_logs"
@@ -113,7 +113,7 @@ async def daily_volume(request: Request, days: int = Field(default=30, ge=1, le=
 
 
 @router.get("/category-stats", response_model=CategoryStatsResponse)
-async def category_stats(request: Request, days: int = Field(default=7, ge=1, le=90)):
+async def category_stats(request: Request, days: int = Query(default=7, ge=1, le=90)):
     """최근 N일간 카테고리별 검색 통계."""
     settings = request.app.state.settings
     table = f"{settings.gcp_project_id}.{settings.bq_dataset}.analytics_search_logs"

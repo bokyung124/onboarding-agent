@@ -12,14 +12,26 @@ from app.services.search_orchestrator import SearchOrchestrator
 @pytest.mark.asyncio
 async def test_orchestrator_passes_is_onboarding(mock_embedder: MagicMock):
     """온보딩 검색 시 vector_search에 is_onboarding=True가 전달되어야 한다."""
+    sample_chunk = ChunkResult(
+        chunk_id="seo_page_0",
+        page_id="seo-onboarding",
+        page_title="SEO 온보딩 매뉴얼",
+        breadcrumb="SEO > 온보딩 매뉴얼",
+        category="seo",
+        content="SEO 온보딩 내용입니다.",
+        source_url="https://notion.so/seo",
+        source_type="notion",
+        distance=0.3,
+    )
+
     mock_vector_search = AsyncMock()
-    mock_vector_search.search.return_value = []
+    mock_vector_search.search.return_value = [sample_chunk]
     mock_vector_search.result_limit = 10
 
     mock_llm = AsyncMock()
     mock_llm.generate_answer.return_value = (
-        "관련 문서를 찾지 못했습니다. 다른 검색어로 시도해 주세요.",
-        [],
+        "SEO 온보딩 절차 안내입니다.",
+        [1],
         [],
     )
 
@@ -32,6 +44,7 @@ async def test_orchestrator_passes_is_onboarding(mock_embedder: MagicMock):
     request = OnboardingSearchRequest(category="seo", query="SEO 온보딩 절차")
     await orchestrator.search(request, is_onboarding=True)
 
+    # 첫 검색에서 결과가 있으므로 fallback 없이 1회만 호출
     mock_vector_search.search.assert_called_once()
     call_kwargs = mock_vector_search.search.call_args
     assert call_kwargs.kwargs["is_onboarding"] is True

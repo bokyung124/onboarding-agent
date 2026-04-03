@@ -77,6 +77,22 @@ class SearchOrchestrator:
             tags=request.tags,
             is_onboarding=is_onboarding,
         )
+
+        # 2-a. Fallback: is_onboarding=True에서 0건이면 is_onboarding=False로 재검색
+        if not chunks and is_onboarding:
+            logger.warning(
+                "search fallback: 0 chunks with is_onboarding=True, "
+                "retrying without onboarding filter. category=%s",
+                request.category,
+            )
+            chunks = await self._vector_search.search(
+                embedding,
+                request.category,
+                client_name=request.client_name,
+                tags=request.tags,
+                is_onboarding=False,
+            )
+
         t2 = time.monotonic()
         logger.info("step=vector_search elapsed=%.1fs chunks=%d", t2 - t1, len(chunks))
 
@@ -183,6 +199,26 @@ class SearchOrchestrator:
             )
             all_chunks.extend(chunks)
 
+        # Fallback: 전체 결과가 0건이면 is_onboarding 제거 후 재검색
+        if not all_chunks and is_onboarding:
+            logger.warning(
+                "multi_step fallback: 0 chunks with is_onboarding=True, "
+                "retrying without onboarding filter. category=%s",
+                request.category,
+            )
+            for sq in sub_queries:
+                embedding = await loop.run_in_executor(
+                    None, partial(self._embedder.embed_query, sq)
+                )
+                chunks = await self._vector_search.search(
+                    embedding,
+                    request.category,
+                    client_name=request.client_name,
+                    tags=request.tags,
+                    is_onboarding=False,
+                )
+                all_chunks.extend(chunks)
+
         # 중복 제거 (chunk_id 기준, 최초 출현 유지)
         seen_ids: set[str] = set()
         deduped: list[ChunkResult] = []
@@ -274,6 +310,36 @@ class SearchOrchestrator:
             top_k=80,
             result_limit=15,
         )
+
+        # 2-b. Fallback: is_onboarding 제거 후 재검색
+        if not chunks:
+            logger.warning(
+                "checklist fallback: 0 chunks with is_onboarding=True, "
+                "retrying without onboarding filter. category=%s",
+                category,
+            )
+            chunks = await self._vector_search.search(
+                embedding,
+                category,
+                is_onboarding=False,
+                top_k=80,
+                result_limit=15,
+            )
+
+        # 2-c. Fallback: 카테고리도 제거 후 재검색
+        if not chunks:
+            logger.warning(
+                "checklist fallback: 0 chunks with category=%s, "
+                "retrying with category=all",
+                category,
+            )
+            chunks = await self._vector_search.search(
+                embedding,
+                "all",
+                is_onboarding=False,
+                top_k=80,
+                result_limit=15,
+            )
 
         # 3. 페이지 중복 제거
         seen_pages: set[str] = set()

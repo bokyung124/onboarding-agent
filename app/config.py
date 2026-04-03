@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     # 검색 설정
     search_top_k: int = 50
     search_result_limit: int = 8
-    search_distance_threshold: float = 0.7
+    search_distance_threshold: float = 0.85
     search_fraction_lists: float = 0.3  # IVF 인덱스 recall 튜닝 (0.0~1.0)
     reranker_enabled: bool = True
 
