@@ -38,6 +38,7 @@ class Settings(BaseSettings):
 
     # 검색 타임아웃
     search_timeout_seconds: float = 60.0
+    slack_search_timeout_seconds: float = 120.0
 
     # 캐시
     cache_ttl_seconds: int = 3600
@@ -57,3 +58,6 @@ class Settings(BaseSettings):
     # 멀티스텝 에이전트
     multi_step_enabled: bool = True
     multi_step_max_sub_queries: int = 3
+
+    # 대시보드 인증
+    dashboard_password: str = ""

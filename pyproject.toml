@@ -19,6 +19,7 @@ dependencies = [
     "aiohttp>=3.9",
     "dbt>=1.0.0.40.15",
     "dbt-bigquery>=1.11.1",
+    "python-multipart>=0.0.22",
 ]
 
 [project.optional-dependencies]

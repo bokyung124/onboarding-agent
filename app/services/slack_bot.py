@@ -23,7 +23,8 @@ logger = logging.getLogger(__name__)
 
 _MENTION_RE = re.compile(r"<@[\w]+>")
 
-_DEFAULT_SEARCH_TIMEOUT = 30.0
+_DEFAULT_SEARCH_TIMEOUT = 120.0
+_PROGRESS_DELAY = 10.0
 _ERROR_MSG = "검색 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
 _TIMEOUT_MSG = "검색 시간이 초과되었습니다. 다시 시도해 주세요."
 
@@ -72,12 +73,30 @@ class SlackBotService:
         logger.info("Slack bot stopping...")
         await self._handler.close_async()
 
+    async def _run_search_with_progress(self, client, channel: str, ack_ts: str | None, coro):
+        """검색 코루틴을 실행하면서 일정 시간 후 진행 상태를 업데이트한다."""
+        task = asyncio.create_task(coro)
+        try:
+            return await asyncio.wait_for(asyncio.shield(task), timeout=_PROGRESS_DELAY)
+        except asyncio.TimeoutError:
+            if ack_ts:
+                try:
+                    await client.chat_update(
+                        channel=channel,
+                        ts=ack_ts,
+                        text="답변을 생성하고 있어요... :writing_hand:",
+                    )
+                except Exception:
+                    pass
+            return await asyncio.wait_for(task, timeout=self._search_timeout - _PROGRESS_DELAY)
+
     async def _handle_mention(self, event: dict, say) -> None:
         """채널에서 @멘션된 메시지를 처리한다."""
         query = _strip_mentions(event.get("text", ""))
         thread_ts = event.get("thread_ts") or event.get("ts")
         channel = event.get("channel", "")
-        await self._process_query(query, say, thread_ts=thread_ts, channel=channel)
+        user_id = event.get("user", "")
+        await self._process_query(query, say, thread_ts=thread_ts, channel=channel, user_id=user_id)
 
     async def _handle_dm(self, event: dict, client) -> None:
         """DM 메시지를 처리한다."""
@@ -106,8 +125,11 @@ class SlackBotService:
         request = SearchRequest(category="all", query=query)
 
         try:
+            user_id = event.get("user", "")
             response = await asyncio.wait_for(
-                self._orchestrator.multi_step_search(request, conversation_history=history or None),
+                self._orchestrator.multi_step_search(
+                    request, conversation_history=history or None, user_id=user_id
+                ),
                 timeout=self._search_timeout,
             )
         except asyncio.TimeoutError:
@@ -162,12 +184,14 @@ class SlackBotService:
         else:
             request = SearchRequest(category=category, query=query)
 
+        user_id = body.get("user", {}).get("id", "")
         try:
             response = await asyncio.wait_for(
                 self._orchestrator.multi_step_search(
                     request,
                     is_onboarding=is_onboarding,
                     conversation_history=history or None,
+                    user_id=user_id or None,
                 ),
                 timeout=self._search_timeout,
             )
@@ -435,9 +459,11 @@ class SlackBotService:
             logger.exception("체크리스트 접수 메시지 전송 실패 (user=%s)", user_id)
 
         try:
-            response = await asyncio.wait_for(
+            response = await self._run_search_with_progress(
+                client,
+                user_id,
+                ack_ts,
                 self._orchestrator.generate_checklist(category),
-                timeout=self._search_timeout,
             )
         except asyncio.TimeoutError:
             logger.warning("checklist timeout user=%s category=%s", user_id, category)
@@ -486,9 +512,11 @@ class SlackBotService:
         request = OnboardingSearchRequest(category=category, query=query)
 
         try:
-            response = await asyncio.wait_for(
-                self._orchestrator.search(request, is_onboarding=True),
-                timeout=self._search_timeout,
+            response = await self._run_search_with_progress(
+                client,
+                user_id,
+                ack_ts,
+                self._orchestrator.search(request, is_onboarding=True, user_id=user_id),
             )
         except asyncio.TimeoutError:
             logger.warning("onboarding search timeout user=%s query=%r", user_id, query)
@@ -537,9 +565,11 @@ class SlackBotService:
         request = SearchRequest(category=category, query=query)
 
         try:
-            response = await asyncio.wait_for(
-                self._orchestrator.search(request),
-                timeout=self._search_timeout,
+            response = await self._run_search_with_progress(
+                client,
+                user_id,
+                ack_ts,
+                self._orchestrator.search(request, user_id=user_id),
             )
         except asyncio.TimeoutError:
             logger.warning("modal search timeout user=%s query=%r", user_id, query)
@@ -571,6 +601,7 @@ class SlackBotService:
         say,
         thread_ts: str | None = None,
         channel: str = "",
+        user_id: str = "",
     ) -> None:
         """쿼리를 검색하고 결과를 Slack으로 전송한다."""
         if not query:
@@ -588,7 +619,9 @@ class SlackBotService:
 
         try:
             response = await asyncio.wait_for(
-                self._orchestrator.multi_step_search(request, conversation_history=history or None),
+                self._orchestrator.multi_step_search(
+                    request, conversation_history=history or None, user_id=user_id or None
+                ),
                 timeout=self._search_timeout,
             )
         except asyncio.TimeoutError:

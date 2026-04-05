@@ -23,6 +23,7 @@ _TABLE_SCHEMA = [
     bigquery.SchemaField("success", "BOOLEAN", mode="REQUIRED"),
     bigquery.SchemaField("client_name", "STRING"),
     bigquery.SchemaField("tags", "STRING"),
+    bigquery.SchemaField("answer", "STRING"),
 ]
 
 
@@ -35,7 +36,7 @@ class SearchAnalytics:
         project_id: str,
         dataset: str,
         table: str = "analytics_search_logs",
-        buffer_size: int = 50,
+        buffer_size: int = 5,
     ):
         self._client = bq_client
         self._table_id = f"{project_id}.{dataset}.{table}"
@@ -55,6 +56,7 @@ class SearchAnalytics:
         success: bool = True,
         client_name: str | None = None,
         tags: str | None = None,
+        answer: str | None = None,
     ) -> None:
         """검색 이벤트를 버퍼에 추가한다. 버퍼가 가득 차면 자동 flush."""
         row = {
@@ -70,6 +72,7 @@ class SearchAnalytics:
             "success": success,
             "client_name": client_name,
             "tags": tags,
+            "answer": answer[:5000] if answer else None,
         }
         async with self._lock:
             self._buffer.append(row)
@@ -117,5 +120,23 @@ class SearchAnalytics:
         try:
             self._client.create_table(table, exists_ok=True)
             logger.info("analytics table ensured: %s", self._table_id)
+            self._patch_schema_if_needed()
         except Exception:
             logger.exception("analytics table creation failed: %s", self._table_id)
+
+    def _patch_schema_if_needed(self) -> None:
+        """기존 테이블에 누락된 컬럼이 있으면 추가한다."""
+        try:
+            existing = self._client.get_table(self._table_id)
+            existing_names = {f.name for f in existing.schema}
+            new_fields = [f for f in _TABLE_SCHEMA if f.name not in existing_names]
+            if new_fields:
+                updated_schema = list(existing.schema) + new_fields
+                existing.schema = updated_schema
+                self._client.update_table(existing, ["schema"])
+                logger.info(
+                    "analytics schema patched: added %s",
+                    [f.name for f in new_fields],
+                )
+        except Exception:
+            logger.exception("analytics schema patch failed: %s", self._table_id)

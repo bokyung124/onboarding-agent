@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}{{ display_name }}{% endblock %}
+
+{% block content %}
+<h1>{{ display_name }}</h1>
+<p class="subtitle">
+  <a href="/dashboard/?days={{ days }}" style="color: #0984e3; text-decoration: none;">&larr; Back to Dashboard</a>
+  &nbsp;&middot;&nbsp; {{ entries | length }} queries in {{ days }} days
+</p>
+
+<div class="stats-row">
+  <div class="stat-card">
+    <div class="label">Total Queries</div>
+    <div class="value">{{ entries | length }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Success Rate</div>
+    <div class="value">
+      {% if entries %}
+        {{ ((entries | selectattr('success') | list | length) / (entries | length) * 100) | round(0) | int }}%
+      {% else %}
+        -
+      {% endif %}
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Avg Latency</div>
+    <div class="value">
+      {% if entries %}
+        {{ (entries | map(attribute='latency_ms') | sum / (entries | length)) | round(0) | int }}ms
+      {% else %}
+        -
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="filter-bar">
+  <input type="text" id="searchInput" placeholder="Search query..." oninput="filterTable()">
+  <select id="daysSelect" onchange="changeDays()">
+    <option value="7" {% if days == 7 %}selected{% endif %}>7 days</option>
+    <option value="14" {% if days == 14 %}selected{% endif %}>14 days</option>
+    <option value="30" {% if days == 30 %}selected{% endif %}>30 days</option>
+    <option value="90" {% if days == 90 %}selected{% endif %}>90 days</option>
+  </select>
+</div>
+
+{% if entries %}
+<table>
+  <thead>
+    <tr>
+      <th style="width:140px">Time</th>
+      <th>Question</th>
+      <th style="width:90px">Category</th>
+      <th style="width:80px">Latency</th>
+      <th style="width:70px">Status</th>
+    </tr>
+  </thead>
+  <tbody id="historyTable">
+    {% for e in entries %}
+    <tr>
+      <td>{{ e.timestamp[:16] }}</td>
+      <td>
+        <div>{{ e.query }}</div>
+        {% if e.answer %}
+        <button class="answer-toggle" onclick="toggleAnswer(this)">Show answer</button>
+        <div class="answer-content">{{ e.answer }}</div>
+        {% endif %}
+      </td>
+      <td><span class="badge badge-category">{{ e.category }}</span></td>
+      <td>{{ e.latency_ms }}ms</td>
+      <td>
+        {% if e.success %}
+          <span class="badge badge-success">OK</span>
+        {% else %}
+          <span class="badge badge-fail">FAIL</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+  <p>No query history for this period.</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleAnswer(btn) {
+  const content = btn.nextElementSibling;
+  content.classList.toggle('open');
+  btn.textContent = content.classList.contains('open') ? 'Hide answer' : 'Show answer';
+}
+function filterTable() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  document.querySelectorAll('#historyTable tr').forEach(row => {
+    const text = row.cells[1].textContent.toLowerCase();
+    row.style.display = text.includes(q) ? '' : 'none';
+  });
+}
+function changeDays() {
+  const days = document.getElementById('daysSelect').value;
+  window.location.href = '/dashboard/users/{{ user_id }}?days=' + days;
+}
+</script>
+{% endblock %}

@@ -50,6 +50,7 @@ class SearchOrchestrator:
         *,
         is_onboarding: bool = False,
         conversation_history: list | None = None,
+        user_id: str | None = None,
     ) -> SearchResponse:
         """사용자 검색 요청을 처리하여 답변과 출처를 반환한다."""
         if self._cache and not conversation_history:
@@ -159,8 +160,10 @@ class SearchOrchestrator:
                     sources_count=len(sources),
                     latency_ms=elapsed_ms,
                     is_onboarding=is_onboarding,
+                    user_id=user_id,
                     client_name=request.client_name,
                     tags=request.tags,
+                    answer=response.answer,
                 )
             )
 
@@ -172,6 +175,7 @@ class SearchOrchestrator:
         *,
         is_onboarding: bool = False,
         conversation_history: list | None = None,
+        user_id: str | None = None,
     ) -> SearchResponse:
         """복잡한 질문을 분해하여 여러 검색을 수행하고 종합 답변을 생성한다."""
         sub_queries = await self._llm.decompose_query(request.query)
@@ -181,6 +185,7 @@ class SearchOrchestrator:
                 request,
                 is_onboarding=is_onboarding,
                 conversation_history=conversation_history,
+                user_id=user_id,
             )
 
         start = time.monotonic()
@@ -278,8 +283,10 @@ class SearchOrchestrator:
                     sources_count=len(sources),
                     latency_ms=elapsed_ms,
                     is_onboarding=is_onboarding,
+                    user_id=user_id,
                     client_name=request.client_name,
                     tags=request.tags,
+                    answer=response.answer,
                 )
             )
 
@@ -329,8 +336,7 @@ class SearchOrchestrator:
         # 2-c. Fallback: 카테고리도 제거 후 재검색
         if not chunks:
             logger.warning(
-                "checklist fallback: 0 chunks with category=%s, "
-                "retrying with category=all",
+                "checklist fallback: 0 chunks with category=%s, retrying with category=all",
                 category,
             )
             chunks = await self._vector_search.search(

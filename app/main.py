@@ -13,7 +13,7 @@ from google.cloud import bigquery
 from app.cache import ChecklistCache, ConversationCache, SearchCache
 from app.config import Settings
 from app.routers import analytics as analytics_router
-from app.routers import categories, health, onboarding, search
+from app.routers import categories, dashboard, health, onboarding, search
 from app.services.analytics import SearchAnalytics
 from app.services.embedder import EmbedderService
 from app.services.llm import LLMService
@@ -93,7 +93,7 @@ async def lifespan(app: FastAPI):
             bot_token=settings.slack_bot_token,
             app_token=settings.slack_app_token,
             orchestrator=orchestrator,
-            search_timeout=settings.search_timeout_seconds,
+            search_timeout=settings.slack_search_timeout_seconds,
             conversation_cache=conversation_cache,
         )
         asyncio.create_task(slack_bot.start())
@@ -118,6 +118,12 @@ app.include_router(categories.router)
 app.include_router(search.router)
 app.include_router(onboarding.router)
 app.include_router(analytics_router.router)
+app.include_router(dashboard.router)
+
+
+@app.get("/")
+async def root():
+    return {"service": "온보딩 에이전트", "health": "/health", "docs": "/docs"}
 
 
 @app.exception_handler(Exception)

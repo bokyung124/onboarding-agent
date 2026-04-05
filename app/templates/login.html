@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Login{% endblock %}
+
+{% block content %}
+<div style="max-width: 360px; margin: 80px auto; text-align: center;">
+  <h1 style="margin-bottom: 0.5rem;">Dashboard Login</h1>
+  <p class="subtitle">Access the usage dashboard</p>
+
+  {% if error %}
+  <div style="background: #f8d7da; color: #721c24; padding: 0.6rem 1rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.9rem;">
+    Incorrect password.
+  </div>
+  {% endif %}
+
+  <form method="post" action="/dashboard/login" style="text-align: left;">
+    <label style="display: block; font-size: 0.85rem; color: #636e72; margin-bottom: 0.3rem;">Password</label>
+    <input
+      type="password"
+      name="password"
+      required
+      autofocus
+      style="width: 100%; padding: 0.6rem 0.75rem; border: 1px solid #dfe6e9; border-radius: 6px; font-size: 1rem; margin-bottom: 1rem;"
+    >
+    <button
+      type="submit"
+      style="width: 100%; padding: 0.6rem; background: #0984e3; color: #fff; border: none; border-radius: 6px; font-size: 1rem; cursor: pointer; font-weight: 600;"
+    >
+      Login
+    </button>
+  </form>
+</div>
+{% endblock %}

@@ -61,6 +61,9 @@ fi
 if [[ -n "${RERANKER_ENABLED}" ]]; then
   ENV_VARS+=",RERANKER_ENABLED=${RERANKER_ENABLED}"
 fi
+if [[ -n "${DASHBOARD_PASSWORD}" ]]; then
+  ENV_VARS+=",DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD}"
+fi
 
 if gcloud run services describe "${SERVICE_NAME}" \
     --region "${REGION}" \
@@ -70,7 +73,8 @@ if gcloud run services describe "${SERVICE_NAME}" \
     --image "${IMAGE}" \
     --region "${REGION}" \
     --project "${GCP_PROJECT_ID}" \
-    --update-env-vars "${ENV_VARS}"
+    --update-env-vars "${ENV_VARS}" \
+    --allow-unauthenticated
 else
   echo "  신규 서비스 생성"
   gcloud run deploy "${SERVICE_NAME}" \
