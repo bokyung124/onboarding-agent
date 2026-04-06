@@ -33,7 +33,8 @@ async def onboarding_search(request: Request, body: OnboardingSearchRequest) -> 
     timeout: float = request.app.state.settings.search_timeout_seconds
     try:
         return await asyncio.wait_for(
-            orchestrator.search(body, is_onboarding=True), timeout=timeout
+            orchestrator.search(body, is_onboarding=True, user_id=body.user_id),
+            timeout=timeout,
         )
     except asyncio.TimeoutError:
         raise HTTPException(status_code=504, detail="검색 요청이 시간 초과되었습니다.")

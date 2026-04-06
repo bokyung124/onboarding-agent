@@ -166,14 +166,13 @@ async def api_user_list(request: Request, days: int = Query(default=30, ge=1, le
     settings = request.app.state.settings
     table = _get_table_id(settings)
     sql = f"""
-    SELECT user_id,
+    SELECT IFNULL(user_id, 'anonymous') as user_id,
            COUNT(*) as query_count,
            CAST(MAX(timestamp) AS STRING) as last_active,
            CAST(MIN(timestamp) AS STRING) as first_seen,
            CAST(AVG(latency_ms) AS INT64) as avg_latency_ms
     FROM `{table}`
-    WHERE user_id IS NOT NULL
-      AND timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
+    WHERE timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
     GROUP BY user_id
     ORDER BY query_count DESC
     """
@@ -206,7 +205,7 @@ async def api_user_history(
            query, answer, category,
            latency_ms, success, sources_count
     FROM `{table}`
-    WHERE user_id = @user_id
+    WHERE IFNULL(user_id, 'anonymous') = @user_id
       AND timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
     ORDER BY timestamp DESC
     LIMIT 200
@@ -234,14 +233,13 @@ async def dashboard_page(request: Request, days: int = Query(default=30, ge=1, l
     settings = request.app.state.settings
     table = _get_table_id(settings)
     sql = f"""
-    SELECT user_id,
+    SELECT IFNULL(user_id, 'anonymous') as user_id,
            COUNT(*) as query_count,
            CAST(MAX(timestamp) AS STRING) as last_active,
            CAST(MIN(timestamp) AS STRING) as first_seen,
            CAST(AVG(latency_ms) AS INT64) as avg_latency_ms
     FROM `{table}`
-    WHERE user_id IS NOT NULL
-      AND timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
+    WHERE timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
     GROUP BY user_id
     ORDER BY query_count DESC
     """
@@ -281,7 +279,7 @@ async def user_detail_page(
            query, answer, category,
            latency_ms, success, sources_count
     FROM `{table}`
-    WHERE user_id = @user_id
+    WHERE IFNULL(user_id, 'anonymous') = @user_id
       AND timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {days} DAY)
     ORDER BY timestamp DESC
     LIMIT 200

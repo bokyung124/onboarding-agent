@@ -13,6 +13,7 @@ class SearchRequest(BaseModel):
         min_length=2,
         max_length=500,
     )
+    user_id: str | None = Field(default=None, description="사용자 ID (Slack user ID 등)")
     client_name: str | None = Field(default=None, description="고객사 이름 필터")
     tags: str | None = Field(default=None, description="태그 필터 (부분 일치)")
 
@@ -27,5 +28,6 @@ class OnboardingSearchRequest(BaseModel):
         min_length=2,
         max_length=500,
     )
+    user_id: str | None = Field(default=None, description="사용자 ID (Slack user ID 등)")
     client_name: str | None = Field(default=None, description="고객사 이름 필터")
     tags: str | None = Field(default=None, description="태그 필터 (부분 일치)")

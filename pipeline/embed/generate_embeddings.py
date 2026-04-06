@@ -40,6 +40,8 @@ def detect_changed_chunks(bq_client: bigquery.Client, project_id: str, dataset: 
             ON c.chunk_id = v.chunk_id
         WHERE v.chunk_id IS NULL
            OR c.last_edited_at > v._embedded_at
+           OR c.category != v.category
+           OR c.is_onboarding != v.is_onboarding
         """
     else:
         # 첫 실행: 전체 청크
@@ -174,12 +176,54 @@ def load_vectors_to_bigquery(
         logger.info("Merged %d vectors into %s", len(vectors), vectors_table)
 
 
+def sync_metadata_from_chunks(
+    bq_client: bigquery.Client,
+    project_id: str,
+    dataset: str,
+) -> int:
+    """mart_enterprise_chunks의 메타데이터(category, is_onboarding 등)를 vectors에 동기화한다.
+
+    임베딩 재생성 없이 category 등 메타데이터 변경만 반영할 때 사용한다.
+    """
+    mart_dataset = f"{dataset}_mart_notion"
+    vectors_table = f"{project_id}.{mart_dataset}.mart_enterprise_vectors"
+    chunks_table = f"{project_id}.{mart_dataset}.mart_enterprise_chunks"
+
+    if not _table_exists(bq_client, vectors_table):
+        logger.info("Vectors table does not exist — skipping metadata sync")
+        return 0
+
+    query = f"""
+    UPDATE `{vectors_table}` v
+    SET
+        v.category = c.category,
+        v.is_onboarding = c.is_onboarding,
+        v.page_title = c.page_title,
+        v.breadcrumb_path = c.breadcrumb_path,
+        v.client_name = c.client_name,
+        v.tags = c.tags
+    FROM `{chunks_table}` c
+    WHERE v.chunk_id = c.chunk_id
+      AND (v.category != c.category
+           OR v.is_onboarding != c.is_onboarding
+           OR v.page_title != c.page_title
+           OR v.breadcrumb_path != c.breadcrumb_path
+           OR IFNULL(v.client_name, '') != IFNULL(c.client_name, '')
+           OR IFNULL(v.tags, '') != IFNULL(c.tags, ''))
+    """
+    job = bq_client.query(query)
+    job.result()
+    updated = job.num_dml_affected_rows or 0
+    logger.info("Metadata sync: updated %d vectors", updated)
+    return updated
+
+
 def ensure_vector_index(
     bq_client: bigquery.Client,
     project_id: str,
     dataset: str,
 ) -> None:
-    """mart_enterprise_vectors에 IVF 벡터 인덱스가 없으면 생성한다."""
+    """mart_enterprise_vectors에 IVF 벡터 인덱스를 (재)생성한다."""
     mart_dataset = f"{dataset}_mart_notion"
     vectors_table = f"{project_id}.{mart_dataset}.mart_enterprise_vectors"
 
@@ -188,7 +232,7 @@ def ensure_vector_index(
         return
 
     ddl = f"""
-    CREATE VECTOR INDEX IF NOT EXISTS idx_enterprise_vectors_embedding
+    CREATE OR REPLACE VECTOR INDEX idx_enterprise_vectors_embedding
     ON `{vectors_table}`(embedding)
     STORING (category, is_onboarding, client_name, tags)
     OPTIONS (

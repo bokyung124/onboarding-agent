@@ -36,7 +36,7 @@ class SearchAnalytics:
         project_id: str,
         dataset: str,
         table: str = "analytics_search_logs",
-        buffer_size: int = 5,
+        buffer_size: int = 1,
     ):
         self._client = bq_client
         self._table_id = f"{project_id}.{dataset}.{table}"

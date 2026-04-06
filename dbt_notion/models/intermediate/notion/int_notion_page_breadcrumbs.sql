@@ -30,8 +30,8 @@ with recursive page_hierarchy as (
             when lower(page_title) like '%pa%' then 'pa'
             when lower(page_title) like '%ua%' then 'ua'
             when lower(page_title) like '%cro%' then 'cro'
-            when lower(page_title) = 'NNT Tech' then 'tech'
-            when lower(page_title) = 'NNT Tools' then 'tools'
+            when lower(page_title) = 'nnt tech' then 'tech'
+            when lower(page_title) = 'nnt tools' then 'tools'
             else 'uncategorized'
         end as category,
         case

@@ -92,11 +92,21 @@ def find_due_users(
     return results
 
 
+_ONBOARDING_CATEGORY_NAMES: dict[str, str] = {
+    "all": "전체",
+    "seo": "SEO",
+    "crm": "CRM",
+    "aso": "ASO",
+    "pa": "PA",
+    "ua": "UA",
+    "cro": "CRO",
+    "tech": "개발",
+}
+
+
 def build_drip_message(category: str, drip_day: int) -> str:
     """드립 Day별 메시지를 생성한다."""
-    from app.models.categories import ONBOARDING_CATEGORY_NAMES
-
-    cat_name = ONBOARDING_CATEGORY_NAMES.get(category, category)
+    cat_name = _ONBOARDING_CATEGORY_NAMES.get(category, category)
 
     if drip_day == 1:
         return (

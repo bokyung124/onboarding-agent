@@ -75,6 +75,19 @@ def detect_and_embed(**context) -> int:
     return len(vectors)
 
 
+def sync_metadata(**context) -> int:
+    """dbt에서 변경된 메타데이터(category 등)를 vectors 테이블에 동기화한다."""
+    from google.cloud import bigquery
+
+    from pipeline.embed.generate_embeddings import sync_metadata_from_chunks
+
+    project_id = os.environ["GCP_PROJECT_ID"]
+    dataset = os.environ.get("BQ_DATASET", "onboarding_agent")
+    bq_client = bigquery.Client(project=project_id)
+
+    return sync_metadata_from_chunks(bq_client, project_id, dataset)
+
+
 def create_vector_index(**context) -> None:
     """mart_enterprise_vectors에 IVF 벡터 인덱스가 없으면 생성한다."""
     from google.cloud import bigquery
@@ -106,4 +119,10 @@ t_ensure_index = PythonOperator(
     dag=dag,
 )
 
-t_dbt >> t_embed >> t_ensure_index
+t_sync_metadata = PythonOperator(
+    task_id="sync_metadata",
+    python_callable=sync_metadata,
+    dag=dag,
+)
+
+t_dbt >> t_sync_metadata >> t_embed >> t_ensure_index
