@@ -59,5 +59,10 @@ class Settings(BaseSettings):
     multi_step_enabled: bool = True
     multi_step_max_sub_queries: int = 3
 
+    # 자기 검증 (Reflection)
+    reflection_enabled: bool = True
+    reflection_distance_threshold: float = 0.65
+    reflection_min_chunks: int = 2
+
     # 대시보드 인증
     dashboard_password: str = ""

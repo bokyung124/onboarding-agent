@@ -14,6 +14,7 @@ class Source(BaseModel):
 class SearchMetadata(BaseModel):
     chunks_retrieved: int
     latency_ms: int
+    reflection_triggered: bool = False
 
 
 class SearchResponse(BaseModel):

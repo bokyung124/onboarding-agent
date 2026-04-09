@@ -105,10 +105,27 @@ DECOMPOSE_SYSTEM_PROMPT = """\
 3. 각 하위 쿼리는 독립적으로 검색 가능한 구체적인 질문이어야 합니다.
 4. 한국어로 작성하세요."""
 
+REFORMULATE_SYSTEM_PROMPT = """\
+당신은 사내 문서 검색 시스템의 쿼리 최적화 전문가입니다.
+사용자의 원래 질문이 좋은 검색 결과를 가져오지 못했습니다.
+검색 결과를 개선할 수 있도록 쿼리를 재구성하세요.
+
+규칙:
+1. 원래 질문의 의도를 유지하되, 다른 표현이나 동의어를 사용하세요.
+2. 너무 구체적인 질문은 약간 일반화하고, 너무 일반적인 질문은 구체화하세요.
+3. 검색에 적합한 키워드 중심의 간결한 쿼리로 변환하세요.
+4. 한국어로 작성하세요.
+5. reasoning에 왜 이렇게 변환했는지 간단히 설명하세요."""
+
 
 class _DecomposeResult(PydanticBaseModel):
     needs_decomposition: bool
     sub_queries: list[str]
+
+
+class _ReformulateResult(PydanticBaseModel):
+    reformulated_query: str
+    reasoning: str
 
 
 class LLMService:
@@ -232,6 +249,57 @@ class LLMService:
             for s in result.steps
         ]
         return result.title, steps
+
+    async def reformulate_query(
+        self,
+        original_query: str,
+        chunk_titles: list[str],
+        category: str = "all",
+    ) -> str:
+        """검색 결과가 부족할 때 쿼리를 재구성한다. 실패 시 원본 쿼리를 반환."""
+        context_hint = ""
+        if chunk_titles:
+            titles_str = ", ".join(chunk_titles[:5])
+            context_hint = f"\n검색된 문서 제목들 (관련도 낮음): {titles_str}"
+
+        user_prompt = (
+            f"원래 질문: {original_query}\n"
+            f"카테고리: {category}"
+            f"{context_hint}\n\n"
+            f"위 질문을 검색에 더 적합하게 재구성하세요."
+        )
+
+        loop = asyncio.get_running_loop()
+        try:
+            response = await loop.run_in_executor(
+                None,
+                partial(
+                    self._client.models.generate_content,
+                    model=self._model,
+                    contents=user_prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=REFORMULATE_SYSTEM_PROMPT,
+                        temperature=0.3,
+                        response_mime_type="application/json",
+                        response_schema=_ReformulateResult,
+                        automatic_function_calling=types.AutomaticFunctionCallingConfig(
+                            disable=True
+                        ),
+                    ),
+                ),
+            )
+            result = response.parsed
+            if result and result.reformulated_query:
+                logger.info(
+                    "query reformulated: original=%r reformulated=%r reason=%r",
+                    original_query,
+                    result.reformulated_query,
+                    result.reasoning,
+                )
+                return result.reformulated_query
+        except Exception:
+            logger.warning("query reformulation failed, using original query")
+        return original_query
 
     async def decompose_query(self, query: str, max_sub_queries: int = 3) -> list[str]:
         """복잡한 질문을 하위 쿼리로 분해한다. 단순 질문이면 원본을 리스트로 반환."""

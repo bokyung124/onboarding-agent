@@ -24,6 +24,7 @@ _TABLE_SCHEMA = [
     bigquery.SchemaField("client_name", "STRING"),
     bigquery.SchemaField("tags", "STRING"),
     bigquery.SchemaField("answer", "STRING"),
+    bigquery.SchemaField("reflection_triggered", "BOOLEAN"),
 ]
 
 
@@ -57,6 +58,7 @@ class SearchAnalytics:
         client_name: str | None = None,
         tags: str | None = None,
         answer: str | None = None,
+        reflection_triggered: bool = False,
     ) -> None:
         """검색 이벤트를 버퍼에 추가한다. 버퍼가 가득 차면 자동 flush."""
         row = {
@@ -73,6 +75,7 @@ class SearchAnalytics:
             "client_name": client_name,
             "tags": tags,
             "answer": answer[:5000] if answer else None,
+            "reflection_triggered": reflection_triggered,
         }
         async with self._lock:
             self._buffer.append(row)

@@ -75,6 +75,7 @@ async def lifespan(app: FastAPI):
         cache=cache,
         checklist_cache=checklist_cache,
         analytics=analytics,
+        settings=settings,
     )
 
     # app.state에 주입

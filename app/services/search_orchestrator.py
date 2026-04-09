@@ -6,6 +6,7 @@ import time
 from functools import partial
 
 from app.cache import ChecklistCache, SearchCache
+from app.config import Settings
 from app.models.categories import ONBOARDING_CATEGORY_NAMES
 from app.models.domain import ChunkResult
 from app.models.request import SearchRequest
@@ -25,6 +26,11 @@ from app.services.vector_search import VectorSearchService
 logger = logging.getLogger(__name__)
 
 
+def _mean_distance(chunks: list[ChunkResult]) -> float:
+    """청크 리스트의 평균 cosine distance를 계산한다."""
+    return sum(c.distance for c in chunks) / len(chunks) if chunks else 1.0
+
+
 class SearchOrchestrator:
     def __init__(
         self,
@@ -35,6 +41,7 @@ class SearchOrchestrator:
         cache: SearchCache | None = None,
         checklist_cache: ChecklistCache | None = None,
         analytics: SearchAnalytics | None = None,
+        settings: Settings | None = None,
     ):
         self._embedder = embedder
         self._vector_search = vector_search
@@ -43,6 +50,43 @@ class SearchOrchestrator:
         self._cache = cache
         self._checklist_cache = checklist_cache
         self._analytics = analytics
+        self._settings = settings
+
+    @staticmethod
+    def _deduplicate_by_page(chunks: list[ChunkResult]) -> list[ChunkResult]:
+        """같은 page_id 청크 중복 제거 (최초 출현 유지)."""
+        seen: set[str] = set()
+        result: list[ChunkResult] = []
+        for chunk in chunks:
+            key = f"{chunk.source_type}:{chunk.page_id}"
+            if key not in seen:
+                seen.add(key)
+                result.append(chunk)
+        return result
+
+    def _assess_relevance(self, chunks: list[ChunkResult]) -> bool:
+        """검색 결과의 관련도가 충분한지 평가한다. True=충분, False=불충분."""
+        if not self._settings:
+            return True
+
+        if len(chunks) < self._settings.reflection_min_chunks:
+            logger.info(
+                "reflection trigger: too_few_chunks count=%d threshold=%d",
+                len(chunks),
+                self._settings.reflection_min_chunks,
+            )
+            return False
+
+        mean_dist = _mean_distance(chunks)
+        if mean_dist > self._settings.reflection_distance_threshold:
+            logger.info(
+                "reflection trigger: high_mean_distance mean=%.3f threshold=%.3f",
+                mean_dist,
+                self._settings.reflection_distance_threshold,
+            )
+            return False
+
+        return True
 
     async def search(
         self,
@@ -82,8 +126,7 @@ class SearchOrchestrator:
         # 2-a. Fallback: is_onboarding=True에서 0건이면 is_onboarding=False로 재검색
         if not chunks and is_onboarding:
             logger.warning(
-                "search fallback: 0 chunks with is_onboarding=True, "
-                "retrying without onboarding filter. category=%s",
+                "search fallback: 0 chunks with is_onboarding=True, retrying without onboarding filter. category=%s",
                 request.category,
             )
             chunks = await self._vector_search.search(
@@ -106,14 +149,70 @@ class SearchOrchestrator:
             logger.info("step=rerank elapsed=%.1fs", t2b - t2)
 
         # 2-c. LLM 입력 전 같은 page_id 청크 중복 제거 (best-ranked 유지)
-        seen_pages: set[str] = set()
-        deduped: list[ChunkResult] = []
-        for chunk in chunks:
-            key = f"{chunk.source_type}:{chunk.page_id}"
-            if key not in seen_pages:
-                seen_pages.add(key)
-                deduped.append(chunk)
-        chunks = deduped
+        chunks = self._deduplicate_by_page(chunks)
+
+        # 2-d. 자기 검증 (Reflection): 결과 관련도가 낮으면 쿼리를 재구성하여 재검색
+        reflection_triggered = False
+        if (
+            self._settings
+            and self._settings.reflection_enabled
+            and chunks
+            and not self._assess_relevance(chunks)
+        ):
+            reflection_triggered = True
+            original_chunks = chunks
+            original_mean = _mean_distance(chunks)
+
+            t_ref = time.monotonic()
+            reformulated = await self._llm.reformulate_query(
+                request.query,
+                chunk_titles=[c.page_title for c in chunks],
+                category=request.category,
+            )
+            logger.info(
+                "step=reflection_reformulate elapsed=%.1fs",
+                time.monotonic() - t_ref,
+            )
+
+            if reformulated != request.query:
+                t_ref2 = time.monotonic()
+                new_embedding = await loop.run_in_executor(
+                    None,
+                    partial(self._embedder.embed_query, reformulated),
+                )
+                new_chunks = await self._vector_search.search(
+                    new_embedding,
+                    request.category,
+                    client_name=request.client_name,
+                    tags=request.tags,
+                    is_onboarding=is_onboarding,
+                )
+                if self._reranker and new_chunks:
+                    new_chunks = await self._reranker.rerank(
+                        reformulated,
+                        new_chunks,
+                        top_n=self._vector_search.result_limit,
+                    )
+                new_chunks = self._deduplicate_by_page(new_chunks)
+                logger.info(
+                    "step=reflection_search elapsed=%.1fs chunks=%d",
+                    time.monotonic() - t_ref2,
+                    len(new_chunks),
+                )
+
+                if new_chunks and _mean_distance(new_chunks) < original_mean:
+                    chunks = new_chunks
+                    logger.info(
+                        "reflection accepted: old=%.3f new=%.3f",
+                        original_mean,
+                        _mean_distance(new_chunks),
+                    )
+                else:
+                    chunks = original_chunks
+                    logger.info(
+                        "reflection rejected: keeping original (%.3f)",
+                        original_mean,
+                    )
 
         # 3. LLM 답변 생성 (cited_indices: 실제 인용한 출처 번호 목록, follow_ups: 후속 질문)
         t3 = time.monotonic()
@@ -143,6 +242,7 @@ class SearchOrchestrator:
             metadata=SearchMetadata(
                 chunks_retrieved=len(chunks),
                 latency_ms=elapsed_ms,
+                reflection_triggered=reflection_triggered,
             ),
             follow_up_questions=follow_ups,
         )
@@ -164,6 +264,7 @@ class SearchOrchestrator:
                     client_name=request.client_name,
                     tags=request.tags,
                     answer=response.answer,
+                    reflection_triggered=reflection_triggered,
                 )
             )
 
@@ -233,20 +334,61 @@ class SearchOrchestrator:
                 deduped.append(chunk)
 
         # 페이지 단위 중복 제거
-        seen_pages: set[str] = set()
-        page_deduped: list[ChunkResult] = []
-        for chunk in deduped:
-            key = f"{chunk.source_type}:{chunk.page_id}"
-            if key not in seen_pages:
-                seen_pages.add(key)
-                page_deduped.append(chunk)
-        chunks = page_deduped
+        chunks = self._deduplicate_by_page(deduped)
 
         # Reranking
         if self._reranker:
             chunks = await self._reranker.rerank(
                 request.query, chunks, top_n=self._vector_search.result_limit
             )
+
+        # 자기 검증 (Reflection)
+        reflection_triggered = False
+        if (
+            self._settings
+            and self._settings.reflection_enabled
+            and chunks
+            and not self._assess_relevance(chunks)
+        ):
+            reflection_triggered = True
+            original_chunks = chunks
+            original_mean = _mean_distance(chunks)
+
+            reformulated = await self._llm.reformulate_query(
+                request.query,
+                chunk_titles=[c.page_title for c in chunks],
+                category=request.category,
+            )
+
+            if reformulated != request.query:
+                new_embedding = await loop.run_in_executor(
+                    None,
+                    partial(self._embedder.embed_query, reformulated),
+                )
+                new_chunks = await self._vector_search.search(
+                    new_embedding,
+                    request.category,
+                    client_name=request.client_name,
+                    tags=request.tags,
+                    is_onboarding=is_onboarding,
+                )
+                if self._reranker and new_chunks:
+                    new_chunks = await self._reranker.rerank(
+                        reformulated,
+                        new_chunks,
+                        top_n=self._vector_search.result_limit,
+                    )
+                new_chunks = self._deduplicate_by_page(new_chunks)
+
+                if new_chunks and _mean_distance(new_chunks) < original_mean:
+                    chunks = new_chunks
+                    logger.info(
+                        "multi_step reflection accepted: old=%.3f new=%.3f",
+                        original_mean,
+                        _mean_distance(new_chunks),
+                    )
+                else:
+                    chunks = original_chunks
 
         answer, cited_indices, follow_ups = await self._llm.generate_answer(
             request.query,
@@ -270,6 +412,7 @@ class SearchOrchestrator:
             metadata=SearchMetadata(
                 chunks_retrieved=len(chunks),
                 latency_ms=elapsed_ms,
+                reflection_triggered=reflection_triggered,
             ),
             follow_up_questions=follow_ups,
         )
@@ -287,6 +430,7 @@ class SearchOrchestrator:
                     client_name=request.client_name,
                     tags=request.tags,
                     answer=response.answer,
+                    reflection_triggered=reflection_triggered,
                 )
             )
 
@@ -321,8 +465,7 @@ class SearchOrchestrator:
         # 2-b. Fallback: is_onboarding 제거 후 재검색
         if not chunks:
             logger.warning(
-                "checklist fallback: 0 chunks with is_onboarding=True, "
-                "retrying without onboarding filter. category=%s",
+                "checklist fallback: 0 chunks with is_onboarding=True, retrying without onboarding filter. category=%s",
                 category,
             )
             chunks = await self._vector_search.search(
@@ -348,14 +491,7 @@ class SearchOrchestrator:
             )
 
         # 3. 페이지 중복 제거
-        seen_pages: set[str] = set()
-        deduped: list[ChunkResult] = []
-        for chunk in chunks:
-            key = f"{chunk.source_type}:{chunk.page_id}"
-            if key not in seen_pages:
-                seen_pages.add(key)
-                deduped.append(chunk)
-        chunks = deduped
+        chunks = self._deduplicate_by_page(chunks)
 
         # 4. LLM 체크리스트 생성
         title, steps_data = await self._llm.generate_checklist(category, chunks)

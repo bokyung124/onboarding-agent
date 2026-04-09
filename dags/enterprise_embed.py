@@ -35,8 +35,10 @@ def run_dbt(**context) -> None:
     """dbt run을 실행한다 (Notion + Slack 모델 모두)."""
     import subprocess
 
+    dag_dir = os.path.dirname(os.path.abspath(__file__))
+    dbt_project_dir = os.path.join(dag_dir, "dbt_notion")
     result = subprocess.run(
-        ["dbt", "run", "--project-dir", "dbt_notion", "--profiles-dir", "dbt_notion"],
+        ["dbt", "run", "--project-dir", dbt_project_dir, "--profiles-dir", dbt_project_dir],
         capture_output=True,
         text=True,
     )

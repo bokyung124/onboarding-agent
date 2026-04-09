@@ -1,5 +1,6 @@
 """Slack 워크스페이스에서 채널 메시지와 유저 정보를 추출한다."""
 
+import asyncio
 import logging
 import re
 from collections.abc import Awaitable, Callable
@@ -185,9 +186,10 @@ class SlackExtractor:
     ) -> list[dict]:
         """채널의 메인 메시지 + 스레드 답글을 수집한다."""
         messages: list[dict] = []
+        parent_ts_list: list[str] = []
         cursor = None
 
-        # conversations.history로 메인 메시지 수집
+        # 1단계: conversations.history로 메인 메시지 수집
         while True:
             kwargs: dict = {"channel": channel_id, "limit": 200}
             if since_ts:
@@ -223,16 +225,22 @@ class SlackExtractor:
                     }
                 )
 
-                # 스레드 답글 수집 (reply_count > 0인 부모 메시지만)
                 if is_parent and reply_count > 0:
-                    replies = await self._fetch_thread_replies(
-                        channel_id, channel_name, ts, extracted_at
-                    )
-                    messages.extend(replies)
+                    parent_ts_list.append(ts)
 
             cursor = response.get("response_metadata", {}).get("next_cursor")
             if not cursor:
                 break
+
+        # 2단계: 스레드 답글 병렬 수집 (semaphore가 동시 실행 수 제한)
+        if parent_ts_list:
+            reply_tasks = [
+                self._fetch_thread_replies(channel_id, channel_name, ts, extracted_at)
+                for ts in parent_ts_list
+            ]
+            results = await asyncio.gather(*reply_tasks)
+            for replies in results:
+                messages.extend(replies)
 
         return messages
 
