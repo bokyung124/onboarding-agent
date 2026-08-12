@@ -38,7 +38,7 @@ with chunks as (
     left join {{ ref('int_slack_channel_categories') }} cc
         on t.channel_id = cc.channel_id
     where char_length(t.thread_text) > 20
-      and t.message_count >= 2
+        and t.message_count >= 2
 )
 
 select * from chunks

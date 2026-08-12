@@ -5,7 +5,7 @@ from google.genai import types
 
 
 class EmbedderService:
-    def __init__(self, client: genai.Client, model: str = "gemini-embedding-2-preview"):
+    def __init__(self, client: genai.Client, model: str = "gemini-embedding-2"):
         self._client = client
         self._model = model
 

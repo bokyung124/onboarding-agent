@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     # Gemini (답변 생성 + 임베딩)
     gemini_api_key: str
     gemini_model: str = "gemini-3-flash-preview"
-    gemini_embedding_model: str = "gemini-embedding-2-preview"
+    gemini_embedding_model: str = "gemini-embedding-2"
 
     # Notion (파이프라인 전용, 서빙에서는 미사용)
     notion_api_key: str = ""
